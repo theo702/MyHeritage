@@ -124,8 +124,6 @@ interface LinkGeometry {
   y1: number
   x2: number
   y2: number
-  midX: number
-  midY: number
   upLabel: string
   downLabel: string
 }
@@ -168,24 +166,21 @@ export function FamilyTreeView({
         ) as HTMLElement | null
         if (!parentEl || !childEl) continue
 
-        const pairKey = [link.parentId, link.childId].sort().join(':')
-        // Une seule courbe visuelle parent-enfant (père+mère → même enfant
-        // : on dessine depuis le milieu du couple si possible)
-        if (seen.has(`${link.childId}`)) {
-          // déjà une ligne vers cet enfant ; on enrichit les labels plus bas
-          continue
-        }
-
-        const parent = tree.people.find((p) => p.id === link.parentId)
         const child = tree.people.find((p) => p.id === link.childId)
-        if (!parent || !child) continue
+        if (!child || seen.has(child.id)) continue
 
-        // Point de départ : bas de la carte parent (ou milieu du couple)
+        const father = child.fatherId
+          ? tree.people.find((p) => p.id === child.fatherId)
+          : undefined
+        const mother = child.motherId
+          ? tree.people.find((p) => p.id === child.motherId)
+          : undefined
+
+        let x1: number
+        let y1: number
         const childParents = [child.fatherId, child.motherId].filter(
           Boolean,
         ) as string[]
-        let x1: number
-        let y1: number
 
         if (childParents.length === 2) {
           const a = canvas.querySelector(
@@ -215,26 +210,17 @@ export function FamilyTreeView({
         const x2 = rc.left + rc.width / 2 - rootBox.left
         const y2 = rc.top - rootBox.top
 
-        const father = child.fatherId
-          ? tree.people.find((p) => p.id === child.fatherId)
-          : undefined
-        const mother = child.motherId
-          ? tree.people.find((p) => p.id === child.motherId)
-          : undefined
-
         let upLabel = 'Parent'
         if (father && mother) upLabel = 'Parents'
         else if (father) upLabel = parentLabelFor(father)
         else if (mother) upLabel = parentLabelFor(mother)
 
         next.push({
-          key: pairKey,
+          key: `link-${child.id}`,
           x1,
           y1,
           x2,
           y2,
-          midX: (x1 + x2) / 2,
-          midY: (y1 + y2) / 2,
           upLabel,
           downLabel: childLabelFor(child),
         })
@@ -254,6 +240,18 @@ export function FamilyTreeView({
     }
   }, [layout, tree, selectedId])
 
+  // Regroupe les liens issus du même point parent (fratrie)
+  const linkGroups = useMemo(() => {
+    const groups = new Map<string, LinkGeometry[]>()
+    for (const l of links) {
+      const key = `${Math.round(l.x1)}:${Math.round(l.y1)}`
+      const list = groups.get(key) ?? []
+      list.push(l)
+      groups.set(key, list)
+    }
+    return Array.from(groups.values())
+  }, [links])
+
   if (layout.generations.length === 0) return null
 
   return (
@@ -264,28 +262,78 @@ export function FamilyTreeView({
         height={size.h}
         aria-hidden
       >
-        {links.map((l) => {
-          const elbowY = l.y1 + (l.y2 - l.y1) * 0.45
-          const path = `M ${l.x1} ${l.y1} V ${elbowY} H ${l.x2} V ${l.y2}`
+        <defs>
+          <marker
+            id="arrow-down"
+            viewBox="0 0 10 10"
+            refX="5"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 0 L 10 5 L 0 10 z" className="gen-arrow-head" />
+          </marker>
+        </defs>
+
+        {linkGroups.map((group) => {
+          const trunkX = group[0].x1
+          const trunkTop = group[0].y1
+          const barY =
+            trunkTop +
+            Math.min(...group.map((l) => l.y2 - l.y1)) * 0.42
+          const xs = group.map((l) => l.x2)
+          const barLeft = Math.min(trunkX, ...xs)
+          const barRight = Math.max(trunkX, ...xs)
+          const groupKey = group.map((l) => l.key).join('|')
+
           return (
-            <g key={l.key}>
-              <path d={path} className="gen-link-path" fill="none" />
-              <text
-                x={l.x2}
-                y={elbowY - 6}
-                textAnchor="middle"
-                className="gen-link-label"
-              >
-                ↑ {l.upLabel}
-              </text>
-              <text
-                x={l.x2}
-                y={elbowY + 14}
-                textAnchor="middle"
-                className="gen-link-label"
-              >
-                ↓ {l.downLabel}
-              </text>
+            <g key={groupKey} className="gen-link-group">
+              {/* Descente depuis les parents jusqu’à la barre */}
+              <line
+                x1={trunkX}
+                y1={trunkTop + 4}
+                x2={trunkX}
+                y2={barY}
+                className="gen-link-path"
+              />
+              {/* Barre horizontale de fratrie */}
+              {group.length > 1 && (
+                <line
+                  x1={barLeft}
+                  y1={barY}
+                  x2={barRight}
+                  y2={barY}
+                  className="gen-link-path"
+                />
+              )}
+
+              {group.map((l) => {
+                const labelY = (barY + l.y2) / 2
+                return (
+                  <g key={l.key}>
+                    <line
+                      x1={l.x2}
+                      y1={barY}
+                      x2={l.x2}
+                      y2={l.y2 - 2}
+                      className="gen-link-path"
+                      markerEnd="url(#arrow-down)"
+                    />
+                    <foreignObject
+                      x={l.x2 - 54}
+                      y={labelY - 24}
+                      width={108}
+                      height={48}
+                    >
+                      <div className="gen-link-badge">
+                        <span className="up">↑ {l.upLabel}</span>
+                        <span className="down">↓ {l.downLabel}</span>
+                      </div>
+                    </foreignObject>
+                  </g>
+                )
+              })}
             </g>
           )
         })}
