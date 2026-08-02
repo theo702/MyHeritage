@@ -352,28 +352,6 @@ export function hasParentsInTree(tree: FamilyTree, person: Person): boolean {
   )
 }
 
-/** Racines d’affichage : sans parents, hors co-parents « flottants ». */
-export function findRoots(tree: FamilyTree): Person[] {
-  const natural = tree.people.filter((p) => !hasParentsInTree(tree, p))
-
-  const roots = natural.filter((p) => {
-    const partner = findPartner(tree, p)
-    // L’autre parent a une lignée → on s’affiche à ses côtés, pas en racine
-    if (partner && hasParentsInTree(tree, partner)) return false
-    return true
-  })
-
-  roots.sort((a, b) => {
-    const ya = a.birthYear ?? 9999
-    const yb = b.birthYear ?? 9999
-    if (ya !== yb) return ya - yb
-    return displayName(a).localeCompare(displayName(b), 'fr')
-  })
-
-  if (roots.length > 0) return roots
-  return tree.people.slice(0, 1)
-}
-
 export interface TreeNode {
   person: Person
   spouse?: Person
@@ -412,6 +390,100 @@ function findPartner(tree: FamilyTree, person: Person): Person | undefined {
   return bestId ? getPerson(tree, bestId) : undefined
 }
 
+function bloodDescendantCount(tree: FamilyTree, personId: string): number {
+  const seen = new Set<string>()
+  const walk = (id: string) => {
+    for (const child of getChildren(tree, id)) {
+      if (seen.has(child.id)) continue
+      seen.add(child.id)
+      walk(child.id)
+    }
+  }
+  walk(personId)
+  return seen.size
+}
+
+/** Composantes connexes (parenté + co-parents). */
+function familyComponents(tree: FamilyTree): string[][] {
+  const parent = new Map<string, string>()
+  const ensure = (id: string) => {
+    if (!parent.has(id)) parent.set(id, id)
+  }
+  const find = (id: string): string => {
+    ensure(id)
+    const p = parent.get(id)!
+    if (p !== id) {
+      const root = find(p)
+      parent.set(id, root)
+      return root
+    }
+    return id
+  }
+  const union = (a: string, b: string) => {
+    const ra = find(a)
+    const rb = find(b)
+    if (ra !== rb) parent.set(ra, rb)
+  }
+
+  for (const person of tree.people) {
+    ensure(person.id)
+    if (person.fatherId) union(person.id, person.fatherId)
+    if (person.motherId) union(person.id, person.motherId)
+    for (const sid of person.spouseIds) union(person.id, sid)
+    const partner = findPartner(tree, person)
+    if (partner) union(person.id, partner.id)
+  }
+
+  const groups = new Map<string, string[]>()
+  for (const person of tree.people) {
+    const root = find(person.id)
+    const list = groups.get(root) ?? []
+    list.push(person.id)
+    groups.set(root, list)
+  }
+  return Array.from(groups.values())
+}
+
+/**
+ * Une seule racine d’affichage par famille : celle qui couvre
+ * le plus de descendants (ex. grands-parents plutôt que le père).
+ */
+export function findRoots(tree: FamilyTree): Person[] {
+  if (tree.people.length === 0) return []
+
+  const roots: Person[] = []
+
+  for (const memberIds of familyComponents(tree)) {
+    const members = memberIds
+      .map((id) => getPerson(tree, id))
+      .filter((p): p is Person => Boolean(p))
+
+    const natural = members.filter((p) => !hasParentsInTree(tree, p))
+    const candidates = natural.length > 0 ? natural : members
+
+    candidates.sort((a, b) => {
+      const da = bloodDescendantCount(tree, a.id)
+      const db = bloodDescendantCount(tree, b.id)
+      if (da !== db) return db - da
+      const ya = a.birthYear ?? 9999
+      const yb = b.birthYear ?? 9999
+      if (ya !== yb) return ya - yb
+      return displayName(a).localeCompare(displayName(b), 'fr')
+    })
+
+    if (candidates[0]) roots.push(candidates[0])
+  }
+
+  roots.sort((a, b) => {
+    const ya = a.birthYear ?? 9999
+    const yb = b.birthYear ?? 9999
+    if (ya !== yb) return ya - yb
+    return displayName(a).localeCompare(displayName(b), 'fr')
+  })
+
+  return roots
+}
+
 /**
  * Build a descendants tree from a root.
  * Couples are shown together; children hang under the couple.
@@ -427,17 +499,15 @@ export function buildDescendantTree(
   visited.add(rootId)
 
   const partner = findPartner(tree, person)
-  const canAttach =
-    Boolean(partner) &&
-    partner !== undefined &&
-    !visited.has(partner.id) &&
-    !hasParentsInTree(tree, partner)
+  const partnerBlocked =
+    partner &&
+    (visited.has(partner.id) || hasParentsInTree(tree, partner))
+  const canAttach = Boolean(partner) && !partnerBlocked
 
   let displayPerson = person
   let spouse: Person | undefined
 
   if (canAttach && partner) {
-    // Racine sans lignée : homme à gauche. Dans une lignée : garder le sang.
     if (
       !hasParentsInTree(tree, person) &&
       person.gender === 'female' &&
@@ -451,11 +521,22 @@ export function buildDescendantTree(
     visited.add(partner.id)
   }
 
-  const childPeople = getChildren(tree, displayPerson.id)
+  let childPeople = getChildren(tree, displayPerson.id)
   if (spouse) {
     for (const c of getChildren(tree, spouse.id)) {
       if (!childPeople.find((x) => x.id === c.id)) childPeople.push(c)
     }
+  } else if (partner && hasParentsInTree(tree, partner)) {
+    // L’autre parent a sa propre lignée : les enfants communs s’affichent là-bas
+    childPeople = childPeople.filter((c) => {
+      const otherId =
+        c.fatherId === displayPerson.id
+          ? c.motherId
+          : c.motherId === displayPerson.id
+            ? c.fatherId
+            : null
+      return otherId !== partner.id
+    })
   }
 
   childPeople.sort((a, b) => {
@@ -474,7 +555,7 @@ export function buildDescendantTree(
   }
 }
 
-/** Forêt complète sans branches orphelines détachées. */
+/** Forêt complète : une branche par famille, sans nœuds flottants. */
 export function buildForest(tree: FamilyTree): TreeNode[] {
   const visited = new Set<string>()
   const nodes: TreeNode[] = []
@@ -489,6 +570,8 @@ export function buildForest(tree: FamilyTree): TreeNode[] {
     if (visited.has(person.id)) continue
     const partner = findPartner(tree, person)
     if (partner && visited.has(partner.id)) continue
+    // Ne pas recréer une mini-branche avec les enfants déjà placés ailleurs
+    if (partner && hasParentsInTree(tree, partner)) continue
     const node = buildDescendantTree(tree, person.id, visited)
     if (node) nodes.push(node)
   }
