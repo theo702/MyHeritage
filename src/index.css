@@ -429,7 +429,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.28rem;
+  gap: 0.35rem;
   flex-shrink: 0;
   align-self: center;
   z-index: 2;
@@ -438,20 +438,31 @@ button {
 
 .relation-link.spouse {
   flex-direction: row;
-  min-width: 5.5rem;
-  padding: 0 0.15rem;
+  min-width: 7.5rem;
+  padding: 0 0.2rem;
 }
 
 .relation-link.child {
   flex-direction: column;
-  gap: 0.1rem;
-  margin: 0.15rem 0 0.35rem;
+  gap: 0.2rem;
+  margin: 0.2rem 0 0.4rem;
+}
+
+.relation-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.relation-side.vertical {
+  flex-direction: column;
+  gap: 0.08rem;
 }
 
 .relation-label {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--accent);
   white-space: nowrap;
@@ -462,11 +473,20 @@ button {
   color: var(--accent-strong);
   font-size: 0.85rem;
   line-height: 1;
-  opacity: 0.9;
+  opacity: 0.95;
 }
 
-.relation-arrow.down {
-  font-size: 0.95rem;
+.relation-sep {
+  width: 0.55rem;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+.relation-sep.vertical {
+  width: 2px;
+  height: 0.45rem;
 }
 
 .relation-link.spouse::before,
@@ -474,9 +494,9 @@ button {
   content: '';
   flex: 1;
   height: 2px;
-  min-width: 0.45rem;
+  min-width: 0.35rem;
   background: linear-gradient(90deg, transparent, var(--accent));
-  opacity: 0.7;
+  opacity: 0.65;
 }
 
 .relation-link.spouse::after {

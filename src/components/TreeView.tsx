@@ -21,10 +21,38 @@ function initials(person: Person): string {
   return (a + b).toUpperCase() || '?'
 }
 
-function childRelationLabel(person: Person): string {
+function childDownLabel(person: Person): string {
   if (person.gender === 'male') return 'Fils'
   if (person.gender === 'female') return 'Fille'
   return 'Enfant'
+}
+
+function parentUpLabel(parent: Person, spouse?: Person): string {
+  if (spouse) {
+    const genders = new Set([parent.gender, spouse.gender])
+    if (genders.has('male') && genders.has('female')) return 'Parents'
+    if (parent.gender === 'male' || spouse.gender === 'male') return 'Pères'
+    if (parent.gender === 'female' || spouse.gender === 'female') return 'Mères'
+    return 'Parents'
+  }
+  if (parent.gender === 'male') return 'Père'
+  if (parent.gender === 'female') return 'Mère'
+  return 'Parent'
+}
+
+function spouseLabels(
+  left: Person,
+  right: Person,
+): { left: string; right: string } {
+  return {
+    left: left.gender === 'female' ? 'Épouse' : left.gender === 'male' ? 'Époux' : 'Conjoint',
+    right:
+      right.gender === 'female'
+        ? 'Épouse'
+        : right.gender === 'male'
+          ? 'Époux'
+          : 'Conjoint',
+  }
 }
 
 function PersonCard({
@@ -55,27 +83,55 @@ function PersonCard({
   )
 }
 
-function SpouseLink() {
+function SpouseLink({ left, right }: { left: Person; right: Person }) {
+  const labels = spouseLabels(left, right)
   return (
-    <div className="relation-link spouse" aria-label="Conjoints">
-      <span className="relation-arrow" aria-hidden>
-        ←
+    <div
+      className="relation-link spouse"
+      aria-label={`${labels.left} et ${labels.right}`}
+    >
+      <span className="relation-side">
+        <span className="relation-arrow" aria-hidden>
+          ←
+        </span>
+        <span className="relation-label">{labels.left}</span>
       </span>
-      <span className="relation-label">Conjoints</span>
-      <span className="relation-arrow" aria-hidden>
-        →
+      <span className="relation-sep" aria-hidden />
+      <span className="relation-side">
+        <span className="relation-label">{labels.right}</span>
+        <span className="relation-arrow" aria-hidden>
+          →
+        </span>
       </span>
     </div>
   )
 }
 
-function ChildLink({ label }: { label: string }) {
+function ChildLink({
+  upLabel,
+  downLabel,
+}: {
+  upLabel: string
+  downLabel: string
+}) {
   return (
-    <div className="relation-link child" aria-label={label}>
-      <span className="relation-arrow down" aria-hidden>
-        ↓
+    <div
+      className="relation-link child"
+      aria-label={`${upLabel} / ${downLabel}`}
+    >
+      <span className="relation-side vertical">
+        <span className="relation-arrow" aria-hidden>
+          ↑
+        </span>
+        <span className="relation-label">{upLabel}</span>
       </span>
-      <span className="relation-label">{label}</span>
+      <span className="relation-sep vertical" aria-hidden />
+      <span className="relation-side vertical">
+        <span className="relation-label">{downLabel}</span>
+        <span className="relation-arrow" aria-hidden>
+          ↓
+        </span>
+      </span>
     </div>
   )
 }
@@ -112,7 +168,7 @@ function TreeBranch({
         />
         {node.spouse && (
           <>
-            <SpouseLink />
+            <SpouseLink left={node.person} right={node.spouse} />
             <PersonCard
               person={node.spouse}
               selected={selectedId === node.spouse.id}
@@ -140,7 +196,10 @@ function TreeBranch({
           <div className="kids-row">
             {node.children.map((child) => (
               <div className="kid-stem" key={child.person.id}>
-                <ChildLink label={childRelationLabel(child.person)} />
+                <ChildLink
+                  upLabel={parentUpLabel(node.person, node.spouse)}
+                  downLabel={childDownLabel(child.person)}
+                />
                 <TreeBranch
                   node={child}
                   selectedId={selectedId}
