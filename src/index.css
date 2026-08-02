@@ -470,10 +470,31 @@ button {
   animation: fadeIn 0.5s ease both;
 }
 
-.relation-link.spouse {
+.relation-link.parents-link {
   flex-direction: row;
-  min-width: 7.5rem;
-  padding: 0 0.2rem;
+  min-width: 2.5rem;
+  padding: 0 0.35rem;
+}
+
+.relation-sep.long {
+  width: 1.75rem;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.55;
+}
+
+.relation-link.parents-link::before,
+.relation-link.parents-link::after {
+  content: '';
+  flex: 1;
+  height: 2px;
+  min-width: 0.35rem;
+  background: linear-gradient(90deg, transparent, var(--accent));
+  opacity: 0.65;
+}
+
+.relation-link.parents-link::after {
+  background: linear-gradient(90deg, var(--accent), transparent);
 }
 
 .relation-link.child {
@@ -521,20 +542,6 @@ button {
 .relation-sep.vertical {
   width: 2px;
   height: 0.45rem;
-}
-
-.relation-link.spouse::before,
-.relation-link.spouse::after {
-  content: '';
-  flex: 1;
-  height: 2px;
-  min-width: 0.35rem;
-  background: linear-gradient(90deg, transparent, var(--accent));
-  opacity: 0.65;
-}
-
-.relation-link.spouse::after {
-  background: linear-gradient(90deg, var(--accent), transparent);
 }
 
 /* connectors */

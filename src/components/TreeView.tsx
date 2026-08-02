@@ -41,26 +41,6 @@ function parentUpLabel(parent: Person, spouse?: Person): string {
   return 'Parent'
 }
 
-function spouseLabels(
-  left: Person,
-  right: Person,
-): { left: string; right: string } {
-  return {
-    left:
-      left.gender === 'female'
-        ? 'Épouse'
-        : left.gender === 'male'
-          ? 'Époux'
-          : 'Conjoint',
-    right:
-      right.gender === 'female'
-        ? 'Épouse'
-        : right.gender === 'male'
-          ? 'Époux'
-          : 'Conjoint',
-  }
-}
-
 function PersonCard({
   person,
   selected,
@@ -107,26 +87,10 @@ function PersonCard({
   )
 }
 
-function SpouseLink({ left, right }: { left: Person; right: Person }) {
-  const labels = spouseLabels(left, right)
+function ParentsLink() {
   return (
-    <div
-      className="relation-link spouse"
-      aria-label={`${labels.left} et ${labels.right}`}
-    >
-      <span className="relation-side">
-        <span className="relation-arrow" aria-hidden>
-          ←
-        </span>
-        <span className="relation-label">{labels.left}</span>
-      </span>
-      <span className="relation-sep" aria-hidden />
-      <span className="relation-side">
-        <span className="relation-label">{labels.right}</span>
-        <span className="relation-arrow" aria-hidden>
-          →
-        </span>
-      </span>
+    <div className="relation-link parents-link" aria-hidden>
+      <span className="relation-sep long" />
     </div>
   )
 }
@@ -195,7 +159,7 @@ function TreeBranch({
         />
         {node.spouse && (
           <>
-            <SpouseLink left={node.person} right={node.spouse} />
+            <ParentsLink />
             <PersonCard
               person={node.spouse}
               selected={selectedId === node.spouse.id}

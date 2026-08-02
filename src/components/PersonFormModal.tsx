@@ -1,5 +1,5 @@
 import type { Gender, Person, RelationType } from '../types'
-import { GENDER_LABELS, RELATION_LABELS } from '../types'
+import { GENDER_LABELS, ADDABLE_RELATIONS, RELATION_LABELS } from '../types'
 import { defaultGenderForRelation, displayName } from '../family'
 import { useEffect, useId, useState } from 'react'
 
@@ -214,7 +214,7 @@ export function AddRelativeChooser({
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const relations = Object.keys(RELATION_LABELS) as RelationType[]
+  const relations = ADDABLE_RELATIONS
 
   return (
     <div className="overlay" onClick={onClose} role="presentation">

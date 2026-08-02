@@ -30,9 +30,6 @@ export function SidePanel({
 }: SidePanelProps) {
   const father = getPerson(tree, person.fatherId)
   const mother = getPerson(tree, person.motherId)
-  const spouses = person.spouseIds
-    .map((id) => getPerson(tree, id))
-    .filter((p): p is Person => Boolean(p))
   const children = getChildren(tree, person.id)
   const siblings = getSiblings(tree, person)
   const years = lifespan(person)
@@ -86,19 +83,6 @@ export function SidePanel({
               '—'
             )}
           </li>
-          {spouses.length > 0 && (
-            <li>
-              <strong>Conjoint(e) :</strong>{' '}
-              {spouses.map((s, i) => (
-                <span key={s.id}>
-                  {i > 0 ? ', ' : ''}
-                  <button type="button" className="linkish" onClick={() => onSelect(s.id)}>
-                    {displayName(s)}
-                  </button>
-                </span>
-              ))}
-            </li>
-          )}
           {siblings.length > 0 && (
             <li>
               <strong>Fratrie :</strong>{' '}
@@ -131,7 +115,7 @@ export function SidePanel({
       <div className="detail-block">
         <h3>Ajouter un membre de la famille</h3>
         <p className="sub" style={{ marginBottom: '0.75rem' }}>
-          Père, mère, frère, sœur, fils, fille ou conjoint…
+          Père, mère, frère, sœur, fils ou fille…
         </p>
         <button type="button" className="btn btn-primary" onClick={onAddRelative} style={{ width: '100%' }}>
           + Ajouter un membre

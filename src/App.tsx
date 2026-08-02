@@ -260,7 +260,7 @@ export default function App() {
               <div className="hint-bar">
                 <p>
                   Clique sur une personne pour voir sa fiche et ajouter père,
-                  mère, frère, sœur, enfant ou conjoint.
+                  mère, frère, sœur, fils ou fille.
                 </p>
                 <span className="stats">
                   {tree.people.length} personne

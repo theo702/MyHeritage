@@ -38,8 +38,18 @@ export const RELATION_LABELS: Record<RelationType, string> = {
   daughter: 'Fille',
   brother: 'Frère',
   sister: 'Sœur',
-  spouse: 'Conjoint(e)',
+  spouse: 'Partenaire',
 }
+
+/** Relations proposées à l’ajout (sans « conjoint ») */
+export const ADDABLE_RELATIONS: RelationType[] = [
+  'father',
+  'mother',
+  'son',
+  'daughter',
+  'brother',
+  'sister',
+]
 
 export const GENDER_LABELS: Record<Gender, string> = {
   male: 'Homme',
