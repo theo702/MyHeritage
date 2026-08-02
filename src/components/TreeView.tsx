@@ -1,11 +1,15 @@
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  buildGenerationLayout,
+  childLabelFor,
   displayName,
   givenNames,
   lifespan,
+  parentLabelFor,
   shortDisplayName,
-  type TreeNode,
+  type GenUnit,
 } from '../family'
-import type { Person } from '../types'
+import type { FamilyTree, Person } from '../types'
 
 interface PersonCardProps {
   person: Person
@@ -13,7 +17,6 @@ interface PersonCardProps {
   dimmed: boolean
   onSelect: (id: string) => void
   onAddRelative?: (id: string) => void
-  style?: React.CSSProperties
 }
 
 function initials(person: Person): string {
@@ -22,40 +25,17 @@ function initials(person: Person): string {
   return (a + b).toUpperCase() || '?'
 }
 
-function childDownLabel(person: Person): string {
-  if (person.gender === 'male') return 'Fils'
-  if (person.gender === 'female') return 'Fille'
-  return 'Enfant'
-}
-
-function parentUpLabel(parent: Person, spouse?: Person): string {
-  if (spouse) {
-    const genders = new Set([parent.gender, spouse.gender])
-    if (genders.has('male') && genders.has('female')) return 'Parents'
-    if (parent.gender === 'male' || spouse.gender === 'male') return 'Pères'
-    if (parent.gender === 'female' || spouse.gender === 'female') return 'Mères'
-    return 'Parents'
-  }
-  if (parent.gender === 'male') return 'Père'
-  if (parent.gender === 'female') return 'Mère'
-  return 'Parent'
-}
-
 function PersonCard({
   person,
   selected,
   dimmed,
   onSelect,
   onAddRelative,
-  style,
 }: PersonCardProps) {
   const years = lifespan(person)
   const hasExtraNames = Boolean(person.secondName || person.thirdName)
   return (
-    <div
-      className={`person-card-wrap${selected ? ' is-selected' : ''}`}
-      style={style}
-    >
+    <div className={`person-card-wrap${selected ? ' is-selected' : ''}`}>
       <button
         type="button"
         className={`person-card${selected ? ' selected' : ''}${dimmed ? ' dimmed' : ''}`}
@@ -87,153 +67,246 @@ function PersonCard({
   )
 }
 
-function ParentsLink() {
-  return (
-    <div className="relation-link parents-link" aria-hidden>
-      <span className="relation-sep long" />
-    </div>
-  )
-}
-
-function ChildLink({
-  upLabel,
-  downLabel,
-}: {
-  upLabel: string
-  downLabel: string
-}) {
-  return (
-    <div
-      className="relation-link child"
-      aria-label={`${upLabel} / ${downLabel}`}
-    >
-      <span className="relation-side vertical">
-        <span className="relation-arrow" aria-hidden>
-          ↑
-        </span>
-        <span className="relation-label">{upLabel}</span>
-      </span>
-      <span className="relation-sep vertical" aria-hidden />
-      <span className="relation-side vertical">
-        <span className="relation-label">{downLabel}</span>
-        <span className="relation-arrow" aria-hidden>
-          ↓
-        </span>
-      </span>
-    </div>
-  )
-}
-
-interface TreeBranchProps {
-  node: TreeNode
-  selectedId: string | null
-  matchIds: Set<string> | null
-  onSelect: (id: string) => void
-  onAddRelative?: (id: string) => void
-  depth?: number
-}
-
-function TreeBranch({
-  node,
+function UnitView({
+  unit,
   selectedId,
   matchIds,
   onSelect,
   onAddRelative,
-  depth = 0,
-}: TreeBranchProps) {
-  const isDimmed = (id: string) => matchIds !== null && !matchIds.has(id)
+}: {
+  unit: GenUnit
+  selectedId: string | null
+  matchIds: Set<string> | null
+  onSelect: (id: string) => void
+  onAddRelative?: (id: string) => void
+}) {
+  const isDimmed = (id: string) =>
+    matchIds !== null && !matchIds.has(id)
 
-  const hasChildren = node.children.length > 0
-  const childCount = node.children.length
+  if (unit.kind === 'single') {
+    return (
+      <PersonCard
+        person={unit.person}
+        selected={selectedId === unit.person.id}
+        dimmed={isDimmed(unit.person.id)}
+        onSelect={onSelect}
+        onAddRelative={onAddRelative}
+      />
+    )
+  }
 
   return (
-    <div className="branch">
-      <div className="couple">
-        <PersonCard
-          person={node.person}
-          selected={selectedId === node.person.id}
-          dimmed={isDimmed(node.person.id)}
-          onSelect={onSelect}
-          onAddRelative={onAddRelative}
-          style={{ animationDelay: `${depth * 50}ms` }}
-        />
-        {node.spouse && (
-          <>
-            <ParentsLink />
-            <PersonCard
-              person={node.spouse}
-              selected={selectedId === node.spouse.id}
-              dimmed={isDimmed(node.spouse.id)}
-              onSelect={onSelect}
-              onAddRelative={onAddRelative}
-              style={{ animationDelay: `${depth * 50 + 40}ms` }}
-            />
-          </>
-        )}
+    <div className="couple">
+      <PersonCard
+        person={unit.left}
+        selected={selectedId === unit.left.id}
+        dimmed={isDimmed(unit.left.id)}
+        onSelect={onSelect}
+        onAddRelative={onAddRelative}
+      />
+      <div className="relation-link parents-link" aria-hidden>
+        <span className="relation-sep long" />
       </div>
-
-      {hasChildren && (
-        <div className="children-wrap">
-          <div className="vline" />
-          {childCount > 1 && (
-            <div className="hline-wrap" aria-hidden>
-              <div
-                className="hline"
-                style={{
-                  width: `${((childCount - 1) / childCount) * 100}%`,
-                }}
-              />
-            </div>
-          )}
-          <div className="kids-row">
-            {node.children.map((child) => (
-              <div className="kid-stem" key={child.person.id}>
-                <ChildLink
-                  upLabel={parentUpLabel(node.person, node.spouse)}
-                  downLabel={childDownLabel(child.person)}
-                />
-                <TreeBranch
-                  node={child}
-                  selectedId={selectedId}
-                  matchIds={matchIds}
-                  onSelect={onSelect}
-                  onAddRelative={onAddRelative}
-                  depth={depth + 1}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <PersonCard
+        person={unit.right}
+        selected={selectedId === unit.right.id}
+        dimmed={isDimmed(unit.right.id)}
+        onSelect={onSelect}
+        onAddRelative={onAddRelative}
+      />
     </div>
   )
+}
+
+interface LinkGeometry {
+  key: string
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  midX: number
+  midY: number
+  upLabel: string
+  downLabel: string
 }
 
 export function FamilyTreeView({
-  roots,
+  tree,
   selectedId,
   matchIds,
   onSelect,
   onAddRelative,
 }: {
-  roots: TreeNode[]
+  tree: FamilyTree
   selectedId: string | null
   matchIds: Set<string> | null
   onSelect: (id: string) => void
   onAddRelative?: (id: string) => void
 }) {
+  const layout = useMemo(() => buildGenerationLayout(tree), [tree])
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [links, setLinks] = useState<LinkGeometry[]>([])
+  const [size, setSize] = useState({ w: 0, h: 0 })
+
+  useLayoutEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const measure = () => {
+      const rootBox = canvas.getBoundingClientRect()
+      setSize({ w: canvas.scrollWidth, h: canvas.scrollHeight })
+
+      const next: LinkGeometry[] = []
+      const seen = new Set<string>()
+
+      for (const link of layout.links) {
+        const parentEl = canvas.querySelector(
+          `[data-person-id="${link.parentId}"]`,
+        ) as HTMLElement | null
+        const childEl = canvas.querySelector(
+          `[data-person-id="${link.childId}"]`,
+        ) as HTMLElement | null
+        if (!parentEl || !childEl) continue
+
+        const pairKey = [link.parentId, link.childId].sort().join(':')
+        // Une seule courbe visuelle parent-enfant (père+mère → même enfant
+        // : on dessine depuis le milieu du couple si possible)
+        if (seen.has(`${link.childId}`)) {
+          // déjà une ligne vers cet enfant ; on enrichit les labels plus bas
+          continue
+        }
+
+        const parent = tree.people.find((p) => p.id === link.parentId)
+        const child = tree.people.find((p) => p.id === link.childId)
+        if (!parent || !child) continue
+
+        // Point de départ : bas de la carte parent (ou milieu du couple)
+        const childParents = [child.fatherId, child.motherId].filter(
+          Boolean,
+        ) as string[]
+        let x1: number
+        let y1: number
+
+        if (childParents.length === 2) {
+          const a = canvas.querySelector(
+            `[data-person-id="${childParents[0]}"]`,
+          ) as HTMLElement | null
+          const b = canvas.querySelector(
+            `[data-person-id="${childParents[1]}"]`,
+          ) as HTMLElement | null
+          if (a && b) {
+            const ra = a.getBoundingClientRect()
+            const rb = b.getBoundingClientRect()
+            x1 =
+              (ra.left + ra.right + rb.left + rb.right) / 4 - rootBox.left
+            y1 = Math.max(ra.bottom, rb.bottom) - rootBox.top
+          } else {
+            const rp = parentEl.getBoundingClientRect()
+            x1 = rp.left + rp.width / 2 - rootBox.left
+            y1 = rp.bottom - rootBox.top
+          }
+        } else {
+          const rp = parentEl.getBoundingClientRect()
+          x1 = rp.left + rp.width / 2 - rootBox.left
+          y1 = rp.bottom - rootBox.top
+        }
+
+        const rc = childEl.getBoundingClientRect()
+        const x2 = rc.left + rc.width / 2 - rootBox.left
+        const y2 = rc.top - rootBox.top
+
+        const father = child.fatherId
+          ? tree.people.find((p) => p.id === child.fatherId)
+          : undefined
+        const mother = child.motherId
+          ? tree.people.find((p) => p.id === child.motherId)
+          : undefined
+
+        let upLabel = 'Parent'
+        if (father && mother) upLabel = 'Parents'
+        else if (father) upLabel = parentLabelFor(father)
+        else if (mother) upLabel = parentLabelFor(mother)
+
+        next.push({
+          key: pairKey,
+          x1,
+          y1,
+          x2,
+          y2,
+          midX: (x1 + x2) / 2,
+          midY: (y1 + y2) / 2,
+          upLabel,
+          downLabel: childLabelFor(child),
+        })
+        seen.add(child.id)
+      }
+
+      setLinks(next)
+    }
+
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(canvas)
+    window.addEventListener('resize', measure)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [layout, tree, selectedId])
+
+  if (layout.generations.length === 0) return null
+
   return (
-    <div className="forest-roots">
-      {roots.map((root) => (
-        <TreeBranch
-          key={root.person.id}
-          node={root}
-          selectedId={selectedId}
-          matchIds={matchIds}
-          onSelect={onSelect}
-          onAddRelative={onAddRelative}
-        />
-      ))}
+    <div className="gen-tree" ref={canvasRef}>
+      <svg
+        className="gen-links"
+        width={size.w}
+        height={size.h}
+        aria-hidden
+      >
+        {links.map((l) => {
+          const elbowY = l.y1 + (l.y2 - l.y1) * 0.45
+          const path = `M ${l.x1} ${l.y1} V ${elbowY} H ${l.x2} V ${l.y2}`
+          return (
+            <g key={l.key}>
+              <path d={path} className="gen-link-path" fill="none" />
+              <text
+                x={l.x2}
+                y={elbowY - 6}
+                textAnchor="middle"
+                className="gen-link-label"
+              >
+                ↑ {l.upLabel}
+              </text>
+              <text
+                x={l.x2}
+                y={elbowY + 14}
+                textAnchor="middle"
+                className="gen-link-label"
+              >
+                ↓ {l.downLabel}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+
+      <div className="gen-rows">
+        {layout.generations.map((row, index) => (
+          <div className="gen-row" key={`gen-${index}`}>
+            {row.map((unit) => (
+              <UnitView
+                key={unit.key}
+                unit={unit}
+                selectedId={selectedId}
+                matchIds={matchIds}
+                onSelect={onSelect}
+                onAddRelative={onAddRelative}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }

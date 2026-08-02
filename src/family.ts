@@ -211,12 +211,16 @@ export function addRelative(
     case 'mother': {
       next.gender = data.gender === 'unknown' ? 'female' : data.gender
       selected.motherId = next.id
-      // Relier au conjoint déjà connu (le père)
       if (selected.fatherId) {
         const father = people.find((p) => p.id === selected.fatherId)
         if (father) linkSpouses(father, next)
+        // Tous les enfants du père reçoivent cette mère
+        for (const child of people) {
+          if (child.fatherId === selected.fatherId && !child.motherId) {
+            child.motherId = next.id
+          }
+        }
       }
-      // Fratrie partageant le même père → même mère
       for (const sibling of people) {
         if (
           sibling.id !== selected.id &&
@@ -577,4 +581,150 @@ export function buildForest(tree: FamilyTree): TreeNode[] {
   }
 
   return nodes
+}
+
+// —— Layout par générations (affichage fiable) ——
+
+export type GenUnit =
+  | { key: string; kind: 'single'; person: Person }
+  | { key: string; kind: 'pair'; left: Person; right: Person }
+
+export interface GenerationLayout {
+  generations: GenUnit[][]
+  /** Liens parent → enfant */
+  links: { parentId: string; childId: string }[]
+}
+
+function computeGenerationMap(tree: FamilyTree): Map<string, number> {
+  const gen = new Map<string, number>()
+
+  for (const p of tree.people) {
+    if (!hasParentsInTree(tree, p)) gen.set(p.id, 0)
+  }
+
+  let changed = true
+  let guard = 0
+  while (changed && guard < tree.people.length + 5) {
+    changed = false
+    guard += 1
+
+    for (const p of tree.people) {
+      let parentMax = -1
+      if (p.fatherId && gen.has(p.fatherId)) {
+        parentMax = Math.max(parentMax, gen.get(p.fatherId)!)
+      }
+      if (p.motherId && gen.has(p.motherId)) {
+        parentMax = Math.max(parentMax, gen.get(p.motherId)!)
+      }
+      if (parentMax >= 0) {
+        const next = parentMax + 1
+        if (gen.get(p.id) !== next) {
+          gen.set(p.id, next)
+          changed = true
+        }
+      }
+    }
+
+    // Co-parents sur la même génération
+    for (const p of tree.people) {
+      const partner = findPartner(tree, p)
+      if (!partner) continue
+      const ga = gen.get(p.id)
+      const gb = gen.get(partner.id)
+      if (ga === undefined && gb === undefined) continue
+      const m = Math.max(ga ?? 0, gb ?? 0)
+      if (gen.get(p.id) !== m) {
+        gen.set(p.id, m)
+        changed = true
+      }
+      if (gen.get(partner.id) !== m) {
+        gen.set(partner.id, m)
+        changed = true
+      }
+    }
+  }
+
+  for (const p of tree.people) {
+    if (!gen.has(p.id)) gen.set(p.id, 0)
+  }
+  return gen
+}
+
+function orderPair(a: Person, b: Person): [Person, Person] {
+  if (a.gender === 'male' && b.gender !== 'male') return [a, b]
+  if (b.gender === 'male' && a.gender !== 'male') return [b, a]
+  return displayName(a).localeCompare(displayName(b), 'fr') <= 0 ? [a, b] : [b, a]
+}
+
+/** Rangées : génération 0 (aïeux) en haut → descendants en bas. */
+export function buildGenerationLayout(tree: FamilyTree): GenerationLayout {
+  if (tree.people.length === 0) {
+    return { generations: [], links: [] }
+  }
+
+  const gen = computeGenerationMap(tree)
+  const maxGen = Math.max(0, ...gen.values())
+  const placed = new Set<string>()
+  const generations: GenUnit[][] = []
+
+  for (let g = 0; g <= maxGen; g++) {
+    const rowPeople = tree.people
+      .filter((p) => gen.get(p.id) === g)
+      .sort((a, b) => {
+        const ya = a.birthYear ?? 9999
+        const yb = b.birthYear ?? 9999
+        if (ya !== yb) return ya - yb
+        return displayName(a).localeCompare(displayName(b), 'fr')
+      })
+
+    const units: GenUnit[] = []
+    for (const person of rowPeople) {
+      if (placed.has(person.id)) continue
+      const partner = findPartner(tree, person)
+      if (
+        partner &&
+        gen.get(partner.id) === g &&
+        !placed.has(partner.id)
+      ) {
+        const [left, right] = orderPair(person, partner)
+        units.push({
+          key: `pair-${left.id}-${right.id}`,
+          kind: 'pair',
+          left,
+          right,
+        })
+        placed.add(left.id)
+        placed.add(right.id)
+      } else {
+        units.push({ key: `solo-${person.id}`, kind: 'single', person })
+        placed.add(person.id)
+      }
+    }
+    if (units.length > 0) generations.push(units)
+  }
+
+  const links: { parentId: string; childId: string }[] = []
+  const ids = new Set(tree.people.map((p) => p.id))
+  for (const child of tree.people) {
+    if (child.fatherId && ids.has(child.fatherId)) {
+      links.push({ parentId: child.fatherId, childId: child.id })
+    }
+    if (child.motherId && ids.has(child.motherId)) {
+      links.push({ parentId: child.motherId, childId: child.id })
+    }
+  }
+
+  return { generations, links }
+}
+
+export function parentLabelFor(person: Person): string {
+  if (person.gender === 'male') return 'Père'
+  if (person.gender === 'female') return 'Mère'
+  return 'Parent'
+}
+
+export function childLabelFor(person: Person): string {
+  if (person.gender === 'male') return 'Fils'
+  if (person.gender === 'female') return 'Fille'
+  return 'Enfant'
 }

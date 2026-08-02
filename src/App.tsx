@@ -9,16 +9,14 @@ import { FamilyTreeView } from './components/TreeView'
 import {
   addFirstPerson,
   addRelative,
-  buildDescendantTree,
-  buildForest,
   deletePerson,
   displayName,
   filterByLastName,
+  getChildren,
   getUniqueLastNames,
   loadTree,
   saveTree,
   updatePerson,
-  type TreeNode,
 } from './family'
 import type { FamilyTree, RelationType } from './types'
 import { RELATION_LABELS } from './types'
@@ -88,15 +86,28 @@ export default function App() {
 
   const selected = tree.people.find((p) => p.id === selectedId) ?? null
 
-  const treeRoots: TreeNode[] = useMemo(() => {
-    if (tree.people.length === 0) return []
-
-    if (viewRootId) {
-      const node = buildDescendantTree(tree, viewRootId)
-      return node ? [node] : []
+  const visibleTree: FamilyTree = useMemo(() => {
+    if (!viewRootId) return tree
+    const keep = new Set<string>()
+    const walkDown = (id: string) => {
+      if (keep.has(id)) return
+      keep.add(id)
+      const person = tree.people.find((p) => p.id === id)
+      if (!person) return
+      for (const sid of person.spouseIds) keep.add(sid)
+      for (const child of getChildren(tree, id)) walkDown(child.id)
     }
-
-    return buildForest(tree)
+    walkDown(viewRootId)
+    // Inclure co-parents des enfants gardés
+    for (const p of tree.people) {
+      if (!keep.has(p.id)) continue
+      if (p.fatherId) keep.add(p.fatherId)
+      if (p.motherId) keep.add(p.motherId)
+    }
+    return {
+      ...tree,
+      people: tree.people.filter((p) => keep.has(p.id)),
+    }
   }, [tree, viewRootId])
 
   function commit(next: FamilyTree) {
@@ -245,7 +256,7 @@ export default function App() {
               </div>
               <div className="tree-canvas">
                 <FamilyTreeView
-                  roots={treeRoots}
+                  tree={visibleTree}
                   selectedId={selectedId}
                   matchIds={matchIds}
                   onSelect={setSelectedId}

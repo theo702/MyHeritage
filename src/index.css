@@ -832,6 +832,51 @@ button {
   align-items: center;
 }
 
+.gen-tree {
+  position: relative;
+  min-width: max-content;
+  padding: 1rem 2rem 2.5rem;
+}
+
+.gen-links {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 0;
+}
+
+.gen-link-path {
+  stroke: var(--line);
+  stroke-width: 2;
+}
+
+.gen-link-label {
+  fill: var(--accent);
+  font-size: 10px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gen-rows {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4.5rem;
+}
+
+.gen-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
