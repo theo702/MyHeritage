@@ -343,14 +343,33 @@ export function deletePerson(tree: FamilyTree, id: string): FamilyTree {
   }
 }
 
-/** People with no parents in the tree — natural roots for layout */
-export function findRoots(tree: FamilyTree): Person[] {
+/** Indique si la personne a un père ou une mère présent dans l’arbre. */
+export function hasParentsInTree(tree: FamilyTree, person: Person): boolean {
   const ids = new Set(tree.people.map((p) => p.id))
-  const roots = tree.people.filter((p) => {
-    const fatherInTree = p.fatherId && ids.has(p.fatherId)
-    const motherInTree = p.motherId && ids.has(p.motherId)
-    return !fatherInTree && !motherInTree
+  return Boolean(
+    (person.fatherId && ids.has(person.fatherId)) ||
+      (person.motherId && ids.has(person.motherId)),
+  )
+}
+
+/** Racines d’affichage : sans parents, hors co-parents « flottants ». */
+export function findRoots(tree: FamilyTree): Person[] {
+  const natural = tree.people.filter((p) => !hasParentsInTree(tree, p))
+
+  const roots = natural.filter((p) => {
+    const partner = findPartner(tree, p)
+    // L’autre parent a une lignée → on s’affiche à ses côtés, pas en racine
+    if (partner && hasParentsInTree(tree, partner)) return false
+    return true
   })
+
+  roots.sort((a, b) => {
+    const ya = a.birthYear ?? 9999
+    const yb = b.birthYear ?? 9999
+    if (ya !== yb) return ya - yb
+    return displayName(a).localeCompare(displayName(b), 'fr')
+  })
+
   if (roots.length > 0) return roots
   return tree.people.slice(0, 1)
 }
@@ -361,7 +380,7 @@ export interface TreeNode {
   children: TreeNode[]
 }
 
-/** Trouve le conjoint explicite, sinon le co-parent déduit des enfants. */
+/** Trouve le co-parent (lien explicite ou déduit des enfants). */
 function findPartner(tree: FamilyTree, person: Person): Person | undefined {
   for (const id of person.spouseIds) {
     const spouse = getPerson(tree, id)
@@ -408,20 +427,28 @@ export function buildDescendantTree(
   visited.add(rootId)
 
   const partner = findPartner(tree, person)
-  // Prefer displaying father (male) on the left when possible
+  const canAttach =
+    Boolean(partner) &&
+    partner !== undefined &&
+    !visited.has(partner.id) &&
+    !hasParentsInTree(tree, partner)
+
   let displayPerson = person
-  let spouse = partner
-  if (partner && !visited.has(partner.id)) {
-    if (person.gender === 'female' && partner.gender === 'male') {
+  let spouse: Person | undefined
+
+  if (canAttach && partner) {
+    // Racine sans lignée : homme à gauche. Dans une lignée : garder le sang.
+    if (
+      !hasParentsInTree(tree, person) &&
+      person.gender === 'female' &&
+      partner.gender === 'male'
+    ) {
       displayPerson = partner
       spouse = person
-      visited.add(partner.id)
     } else {
-      visited.add(partner.id)
+      spouse = partner
     }
-  } else if (partner && visited.has(partner.id)) {
-    // Partner already rendered elsewhere — don't show as dangling root
-    spouse = undefined
+    visited.add(partner.id)
   }
 
   const childPeople = getChildren(tree, displayPerson.id)
@@ -445,4 +472,26 @@ export function buildDescendantTree(
       .map((c) => buildDescendantTree(tree, c.id, visited))
       .filter((n): n is TreeNode => n !== null),
   }
+}
+
+/** Forêt complète sans branches orphelines détachées. */
+export function buildForest(tree: FamilyTree): TreeNode[] {
+  const visited = new Set<string>()
+  const nodes: TreeNode[] = []
+
+  for (const root of findRoots(tree)) {
+    if (visited.has(root.id)) continue
+    const node = buildDescendantTree(tree, root.id, visited)
+    if (node) nodes.push(node)
+  }
+
+  for (const person of tree.people) {
+    if (visited.has(person.id)) continue
+    const partner = findPartner(tree, person)
+    if (partner && visited.has(partner.id)) continue
+    const node = buildDescendantTree(tree, person.id, visited)
+    if (node) nodes.push(node)
+  }
+
+  return nodes
 }

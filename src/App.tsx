@@ -10,10 +10,10 @@ import {
   addFirstPerson,
   addRelative,
   buildDescendantTree,
+  buildForest,
   deletePerson,
   displayName,
   filterByLastName,
-  findRoots,
   getUniqueLastNames,
   loadTree,
   saveTree,
@@ -96,34 +96,7 @@ export default function App() {
       return node ? [node] : []
     }
 
-    // Prefer explicit root, else natural roots (no parents)
-    const natural = findRoots(tree)
-    const visited = new Set<string>()
-    const nodes: TreeNode[] = []
-
-    // If a stored root exists and is natural-ish, start there first
-    const ordered = tree.rootId
-      ? [
-          ...natural.filter((p) => p.id === tree.rootId),
-          ...natural.filter((p) => p.id !== tree.rootId),
-        ]
-      : natural
-
-    for (const root of ordered) {
-      if (visited.has(root.id)) continue
-      const node = buildDescendantTree(tree, root.id, visited)
-      if (node) nodes.push(node)
-    }
-
-    // Orphans not reached (e.g. disconnected branches)
-    for (const person of tree.people) {
-      if (visited.has(person.id)) continue
-      // Skip if they're a spouse of someone already shown as spouse
-      const node = buildDescendantTree(tree, person.id, visited)
-      if (node) nodes.push(node)
-    }
-
-    return nodes
+    return buildForest(tree)
   }, [tree, viewRootId])
 
   function commit(next: FamilyTree) {
