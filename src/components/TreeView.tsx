@@ -197,34 +197,29 @@ export function FamilyTreeView({
 
         parentBoxes.sort((a, b) => a.cx - b.cx)
 
-        let pairLeft: number
-        let pairRight: number
         let joinX: number
         let joinY: number
 
         if (parentBoxes.length >= 2) {
-          // Trait conjugal entre les deux cartes, descente depuis le milieu
-          pairLeft = parentBoxes[0].right
-          pairRight = parentBoxes[parentBoxes.length - 1].left
-          joinX = (pairLeft + pairRight) / 2
-          joinY =
-            parentBoxes.reduce((s, p) => s + p.midY, 0) / parentBoxes.length
+          // Point de départ au milieu entre les parents, sans trait conjugal
+          const left = parentBoxes[0]
+          const right = parentBoxes[parentBoxes.length - 1]
+          joinX = (left.cx + right.cx) / 2
+          joinY = Math.max(...parentBoxes.map((p) => p.bottom))
         } else {
-          pairLeft = parentBoxes[0].cx
-          pairRight = parentBoxes[0].cx
           joinX = parentBoxes[0].cx
           joinY = parentBoxes[0].bottom
         }
 
         const minChildTop = Math.min(...children.map((c) => c.top))
-        const barY = joinY + (minChildTop - joinY) * 0.55
+        const barY = joinY + (minChildTop - joinY) * 0.45
 
         next.push({
           key: fam.key,
           joinX,
           joinY,
-          pairLeft,
-          pairRight,
+          pairLeft: joinX,
+          pairRight: joinX,
           barY,
           children,
         })
@@ -260,17 +255,7 @@ export function FamilyTreeView({
 
           return (
             <g key={fam.key} className="pedigree-links">
-              {/* Trait entre les parents */}
-              {fam.pairRight - fam.pairLeft > 4 && (
-                <line
-                  x1={fam.pairLeft}
-                  y1={fam.joinY}
-                  x2={fam.pairRight}
-                  y2={fam.joinY}
-                  className="pedigree-path couple-path"
-                />
-              )}
-              {/* Descente du couple vers la barre des enfants */}
+              {/* Descente depuis l’espace entre les parents (sans les relier) */}
               <line
                 x1={fam.joinX}
                 y1={fam.joinY}
