@@ -1,7 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   buildGenerationLayout,
-  childLabelFor,
   displayName,
   givenNames,
   lifespan,
@@ -83,18 +82,24 @@ function UnitView({
 
   if (unit.kind === 'single') {
     return (
-      <PersonCard
-        person={unit.person}
-        selected={selectedId === unit.person.id}
-        dimmed={isDimmed(unit.person.id)}
-        onSelect={onSelect}
-        onAddRelative={onAddRelative}
-      />
+      <div className="pedigree-unit" data-unit-id={unit.person.id}>
+        <PersonCard
+          person={unit.person}
+          selected={selectedId === unit.person.id}
+          dimmed={isDimmed(unit.person.id)}
+          onSelect={onSelect}
+          onAddRelative={onAddRelative}
+        />
+      </div>
     )
   }
 
   return (
-    <div className="couple" data-couple={`${unit.left.id},${unit.right.id}`}>
+    <div
+      className="pedigree-unit couple-unit"
+      data-unit-id={`${unit.left.id},${unit.right.id}`}
+      data-couple={`${unit.left.id},${unit.right.id}`}
+    >
       <PersonCard
         person={unit.left}
         selected={selectedId === unit.left.id}
@@ -102,9 +107,6 @@ function UnitView({
         onSelect={onSelect}
         onAddRelative={onAddRelative}
       />
-      <div className="relation-link parents-link" aria-hidden>
-        <span className="relation-sep long" />
-      </div>
       <PersonCard
         person={unit.right}
         selected={selectedId === unit.right.id}
@@ -118,10 +120,14 @@ function UnitView({
 
 interface DrawnFamily {
   key: string
-  trunkX: number
-  trunkTop: number
+  /** Centre du couple (milieu du trait conjugal) */
+  joinX: number
+  joinY: number
+  /** Extrêmités du trait entre les deux parents */
+  pairLeft: number
+  pairRight: number
   barY: number
-  children: { id: string; x: number; y: number; label: string }[]
+  children: { id: string; x: number; top: number }[]
 }
 
 export function FamilyTreeView({
@@ -149,7 +155,6 @@ export function FamilyTreeView({
     const measure = () => {
       const rootBox = canvas.getBoundingClientRect()
       setSize({ w: canvas.scrollWidth, h: canvas.scrollHeight })
-
       const next: DrawnFamily[] = []
 
       for (const fam of layout.families) {
@@ -162,46 +167,66 @@ export function FamilyTreeView({
           )
           .filter((el): el is HTMLElement => Boolean(el))
 
-        const childEls = fam.childIds
+        const children = fam.childIds
           .map((id) => {
             const el = canvas.querySelector(
               `[data-person-id="${id}"]`,
             ) as HTMLElement | null
-            const person = tree.people.find((p) => p.id === id)
-            if (!el || !person) return null
+            if (!el) return null
             const r = el.getBoundingClientRect()
             return {
               id,
               x: r.left + r.width / 2 - rootBox.left,
-              y: r.top - rootBox.top,
-              label: childLabelFor(person),
+              top: r.top - rootBox.top,
             }
           })
           .filter((c): c is NonNullable<typeof c> => Boolean(c))
 
-        if (parentEls.length === 0 || childEls.length === 0) continue
+        if (parentEls.length === 0 || children.length === 0) continue
 
-        const bottoms = parentEls.map((el) => {
+        const parentBoxes = parentEls.map((el) => {
           const r = el.getBoundingClientRect()
           return {
+            left: r.left - rootBox.left,
+            right: r.right - rootBox.left,
             cx: r.left + r.width / 2 - rootBox.left,
             bottom: r.bottom - rootBox.top,
+            midY: r.top + r.height * 0.55 - rootBox.top,
           }
         })
 
-        const trunkX =
-          bottoms.reduce((s, p) => s + p.cx, 0) / bottoms.length
-        const trunkTop = Math.max(...bottoms.map((p) => p.bottom))
-        const minChildY = Math.min(...childEls.map((c) => c.y))
-        const gap = minChildY - trunkTop
-        const barY = trunkTop + Math.max(28, gap * 0.4)
+        parentBoxes.sort((a, b) => a.cx - b.cx)
+
+        let pairLeft: number
+        let pairRight: number
+        let joinX: number
+        let joinY: number
+
+        if (parentBoxes.length >= 2) {
+          // Trait conjugal entre les deux cartes, descente depuis le milieu
+          pairLeft = parentBoxes[0].right
+          pairRight = parentBoxes[parentBoxes.length - 1].left
+          joinX = (pairLeft + pairRight) / 2
+          joinY =
+            parentBoxes.reduce((s, p) => s + p.midY, 0) / parentBoxes.length
+        } else {
+          pairLeft = parentBoxes[0].cx
+          pairRight = parentBoxes[0].cx
+          joinX = parentBoxes[0].cx
+          joinY = parentBoxes[0].bottom
+        }
+
+        const minChildTop = Math.min(...children.map((c) => c.top))
+        const barY = joinY + (minChildTop - joinY) * 0.55
 
         next.push({
           key: fam.key,
-          trunkX,
-          trunkTop,
+          joinX,
+          joinY,
+          pairLeft,
+          pairRight,
           barY,
-          children: childEls,
+          children,
         })
       }
 
@@ -221,71 +246,58 @@ export function FamilyTreeView({
   if (layout.generations.length === 0) return null
 
   return (
-    <div className="gen-tree" ref={canvasRef}>
+    <div className="gen-tree pedigree" ref={canvasRef}>
       <svg
         className="gen-links"
         width={size.w}
         height={size.h}
         aria-hidden
       >
-        <defs>
-          <marker
-            id="arrow-down"
-            viewBox="0 0 12 12"
-            refX="6"
-            refY="10"
-            markerWidth="7"
-            markerHeight="7"
-            orient="auto"
-          >
-            <path d="M2 2 L6 10 L10 2 Z" className="gen-arrow-head" />
-          </marker>
-        </defs>
-
         {drawn.map((fam) => {
-          const xs = fam.children.map((c) => c.x)
-          const barLeft = Math.min(fam.trunkX, ...xs)
-          const barRight = Math.max(fam.trunkX, ...xs)
+          const childXs = fam.children.map((c) => c.x)
+          const barLeft = Math.min(...childXs)
+          const barRight = Math.max(...childXs)
 
           return (
-            <g key={fam.key} className="gen-link-group">
+            <g key={fam.key} className="pedigree-links">
+              {/* Trait entre les parents */}
+              {fam.pairRight - fam.pairLeft > 4 && (
+                <line
+                  x1={fam.pairLeft}
+                  y1={fam.joinY}
+                  x2={fam.pairRight}
+                  y2={fam.joinY}
+                  className="pedigree-path couple-path"
+                />
+              )}
+              {/* Descente du couple vers la barre des enfants */}
               <line
-                x1={fam.trunkX}
-                y1={fam.trunkTop + 2}
-                x2={fam.trunkX}
+                x1={fam.joinX}
+                y1={fam.joinY}
+                x2={fam.joinX}
                 y2={fam.barY}
-                className="gen-link-path"
+                className="pedigree-path"
               />
+              {/* Barre horizontale (fratrie) */}
               {fam.children.length > 1 && (
                 <line
                   x1={barLeft}
                   y1={fam.barY}
                   x2={barRight}
                   y2={fam.barY}
-                  className="gen-link-path"
+                  className="pedigree-path"
                 />
               )}
+              {/* Descente vers chaque enfant */}
               {fam.children.map((child) => (
-                <g key={child.id}>
-                  <line
-                    x1={child.x}
-                    y1={fam.barY}
-                    x2={child.x}
-                    y2={child.y - 4}
-                    className="gen-link-path"
-                    markerEnd="url(#arrow-down)"
-                  />
-                  <foreignObject
-                    x={child.x - 36}
-                    y={(fam.barY + child.y) / 2 - 12}
-                    width={72}
-                    height={24}
-                  >
-                    <div className="gen-link-badge">
-                      <span>{child.label}</span>
-                    </div>
-                  </foreignObject>
-                </g>
+                <line
+                  key={child.id}
+                  x1={child.x}
+                  y1={fam.barY}
+                  x2={child.x}
+                  y2={child.top}
+                  className="pedigree-path"
+                />
               ))}
             </g>
           )
