@@ -69,7 +69,7 @@ export function SidePanel({
           <li>
             <strong>Père :</strong>{' '}
             {father ? (
-              <button type="button" className="btn btn-ghost" style={{ padding: '0.15rem 0.5rem', display: 'inline' }} onClick={() => onSelect(father.id)}>
+              <button type="button" className="linkish" onClick={() => onSelect(father.id)}>
                 {displayName(father)}
               </button>
             ) : (
@@ -79,7 +79,7 @@ export function SidePanel({
           <li>
             <strong>Mère :</strong>{' '}
             {mother ? (
-              <button type="button" className="btn btn-ghost" style={{ padding: '0.15rem 0.5rem', display: 'inline' }} onClick={() => onSelect(mother.id)}>
+              <button type="button" className="linkish" onClick={() => onSelect(mother.id)}>
                 {displayName(mother)}
               </button>
             ) : (
@@ -89,19 +89,40 @@ export function SidePanel({
           {spouses.length > 0 && (
             <li>
               <strong>Conjoint(e) :</strong>{' '}
-              {spouses.map((s) => displayName(s)).join(', ')}
+              {spouses.map((s, i) => (
+                <span key={s.id}>
+                  {i > 0 ? ', ' : ''}
+                  <button type="button" className="linkish" onClick={() => onSelect(s.id)}>
+                    {displayName(s)}
+                  </button>
+                </span>
+              ))}
             </li>
           )}
           {siblings.length > 0 && (
             <li>
               <strong>Fratrie :</strong>{' '}
-              {siblings.map((s) => displayName(s)).join(', ')}
+              {siblings.map((s, i) => (
+                <span key={s.id}>
+                  {i > 0 ? ', ' : ''}
+                  <button type="button" className="linkish" onClick={() => onSelect(s.id)}>
+                    {displayName(s)}
+                  </button>
+                </span>
+              ))}
             </li>
           )}
           {children.length > 0 && (
             <li>
               <strong>Enfants :</strong>{' '}
-              {children.map((c) => displayName(c)).join(', ')}
+              {children.map((c, i) => (
+                <span key={c.id}>
+                  {i > 0 ? ', ' : ''}
+                  <button type="button" className="linkish" onClick={() => onSelect(c.id)}>
+                    {displayName(c)}
+                  </button>
+                </span>
+              ))}
             </li>
           )}
         </ul>

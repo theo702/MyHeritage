@@ -525,6 +525,21 @@ button {
   font-weight: 500;
 }
 
+.linkish {
+  display: inline;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-size: inherit;
+}
+
+.linkish:hover {
+  color: var(--ink);
+}
+
 .relation-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

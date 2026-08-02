@@ -312,16 +312,11 @@ export default function App() {
 
       {modal.type === 'add-relative' && modalPerson && (
         <PersonFormModal
+          key={`${modal.personId}-${modal.relation}`}
           title={`Ajouter : ${RELATION_LABELS[modal.relation]}`}
           subtitle={`Lien avec ${displayName(modalPerson)}`}
           relation={modal.relation}
-          defaultLastName={
-            modal.relation === 'spouse'
-              ? ''
-              : modal.relation === 'mother' || modal.relation === 'father'
-                ? modalPerson.lastName
-                : modalPerson.lastName
-          }
+          defaultLastName={modalPerson.lastName}
           submitLabel="Ajouter à l’arbre"
           onClose={() => setModal({ type: 'none' })}
           onSubmit={handleAddRelative}
@@ -330,6 +325,7 @@ export default function App() {
 
       {modal.type === 'edit' && modalPerson && (
         <PersonFormModal
+          key={`edit-${modal.personId}`}
           title="Modifier la personne"
           submitLabel="Enregistrer"
           initial={{

@@ -31,6 +31,7 @@ function PersonCard({
       onClick={() => onSelect(person.id)}
       style={style}
       aria-pressed={selected}
+      aria-label={displayName(person)}
     >
       <div className={`person-avatar ${person.gender}`}>{initials(person)}</div>
       <p className="person-name">{displayName(person)}</p>
@@ -54,8 +55,7 @@ function TreeBranch({
   onSelect,
   depth = 0,
 }: TreeBranchProps) {
-  const isDimmed = (id: string) =>
-    matchIds !== null && matchIds.size > 0 && !matchIds.has(id)
+  const isDimmed = (id: string) => matchIds !== null && !matchIds.has(id)
 
   const hasChildren = node.children.length > 0
   const childCount = node.children.length
