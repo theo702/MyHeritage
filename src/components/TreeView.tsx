@@ -21,6 +21,12 @@ function initials(person: Person): string {
   return (a + b).toUpperCase() || '?'
 }
 
+function childRelationLabel(person: Person): string {
+  if (person.gender === 'male') return 'Fils'
+  if (person.gender === 'female') return 'Fille'
+  return 'Enfant'
+}
+
 function PersonCard({
   person,
   selected,
@@ -46,6 +52,31 @@ function PersonCard({
       )}
       {years && <p className="person-meta">{years}</p>}
     </button>
+  )
+}
+
+function SpouseLink() {
+  return (
+    <div className="relation-link spouse" aria-label="Conjoints">
+      <span className="relation-arrow" aria-hidden>
+        ←
+      </span>
+      <span className="relation-label">Conjoints</span>
+      <span className="relation-arrow" aria-hidden>
+        →
+      </span>
+    </div>
+  )
+}
+
+function ChildLink({ label }: { label: string }) {
+  return (
+    <div className="relation-link child" aria-label={label}>
+      <span className="relation-arrow down" aria-hidden>
+        ↓
+      </span>
+      <span className="relation-label">{label}</span>
+    </div>
   )
 }
 
@@ -81,7 +112,7 @@ function TreeBranch({
         />
         {node.spouse && (
           <>
-            <span className="spouse-link" aria-hidden />
+            <SpouseLink />
             <PersonCard
               person={node.spouse}
               selected={selectedId === node.spouse.id}
@@ -109,6 +140,7 @@ function TreeBranch({
           <div className="kids-row">
             {node.children.map((child) => (
               <div className="kid-stem" key={child.person.id}>
+                <ChildLink label={childRelationLabel(child.person)} />
                 <TreeBranch
                   node={child}
                   selectedId={selectedId}
