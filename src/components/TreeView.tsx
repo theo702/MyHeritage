@@ -12,6 +12,7 @@ interface PersonCardProps {
   selected: boolean
   dimmed: boolean
   onSelect: (id: string) => void
+  onAddRelative?: (id: string) => void
   style?: React.CSSProperties
 }
 
@@ -45,7 +46,12 @@ function spouseLabels(
   right: Person,
 ): { left: string; right: string } {
   return {
-    left: left.gender === 'female' ? 'Épouse' : left.gender === 'male' ? 'Époux' : 'Conjoint',
+    left:
+      left.gender === 'female'
+        ? 'Épouse'
+        : left.gender === 'male'
+          ? 'Époux'
+          : 'Conjoint',
     right:
       right.gender === 'female'
         ? 'Épouse'
@@ -60,26 +66,44 @@ function PersonCard({
   selected,
   dimmed,
   onSelect,
+  onAddRelative,
   style,
 }: PersonCardProps) {
   const years = lifespan(person)
   const hasExtraNames = Boolean(person.secondName || person.thirdName)
   return (
-    <button
-      type="button"
-      className={`person-card${selected ? ' selected' : ''}${dimmed ? ' dimmed' : ''}`}
-      onClick={() => onSelect(person.id)}
+    <div
+      className={`person-card-wrap${selected ? ' is-selected' : ''}`}
       style={style}
-      aria-pressed={selected}
-      aria-label={displayName(person)}
     >
-      <div className={`person-avatar ${person.gender}`}>{initials(person)}</div>
-      <p className="person-name">{shortDisplayName(person)}</p>
-      {hasExtraNames && (
-        <p className="person-given">{givenNames(person)}</p>
+      <button
+        type="button"
+        className={`person-card${selected ? ' selected' : ''}${dimmed ? ' dimmed' : ''}`}
+        onClick={() => onSelect(person.id)}
+        aria-pressed={selected}
+        aria-label={displayName(person)}
+        data-person-id={person.id}
+      >
+        <div className={`person-avatar ${person.gender}`}>{initials(person)}</div>
+        <p className="person-name">{shortDisplayName(person)}</p>
+        {hasExtraNames && (
+          <p className="person-given">{givenNames(person)}</p>
+        )}
+        {years && <p className="person-meta">{years}</p>}
+      </button>
+      {selected && onAddRelative && (
+        <button
+          type="button"
+          className="card-add-btn"
+          onClick={(e) => {
+            e.stopPropagation()
+            onAddRelative(person.id)
+          }}
+        >
+          + Ajouter un membre
+        </button>
       )}
-      {years && <p className="person-meta">{years}</p>}
-    </button>
+    </div>
   )
 }
 
@@ -141,6 +165,7 @@ interface TreeBranchProps {
   selectedId: string | null
   matchIds: Set<string> | null
   onSelect: (id: string) => void
+  onAddRelative?: (id: string) => void
   depth?: number
 }
 
@@ -149,6 +174,7 @@ function TreeBranch({
   selectedId,
   matchIds,
   onSelect,
+  onAddRelative,
   depth = 0,
 }: TreeBranchProps) {
   const isDimmed = (id: string) => matchIds !== null && !matchIds.has(id)
@@ -164,6 +190,7 @@ function TreeBranch({
           selected={selectedId === node.person.id}
           dimmed={isDimmed(node.person.id)}
           onSelect={onSelect}
+          onAddRelative={onAddRelative}
           style={{ animationDelay: `${depth * 50}ms` }}
         />
         {node.spouse && (
@@ -174,6 +201,7 @@ function TreeBranch({
               selected={selectedId === node.spouse.id}
               dimmed={isDimmed(node.spouse.id)}
               onSelect={onSelect}
+              onAddRelative={onAddRelative}
               style={{ animationDelay: `${depth * 50 + 40}ms` }}
             />
           </>
@@ -205,6 +233,7 @@ function TreeBranch({
                   selectedId={selectedId}
                   matchIds={matchIds}
                   onSelect={onSelect}
+                  onAddRelative={onAddRelative}
                   depth={depth + 1}
                 />
               </div>
@@ -221,11 +250,13 @@ export function FamilyTreeView({
   selectedId,
   matchIds,
   onSelect,
+  onAddRelative,
 }: {
   roots: TreeNode[]
   selectedId: string | null
   matchIds: Set<string> | null
   onSelect: (id: string) => void
+  onAddRelative?: (id: string) => void
 }) {
   return (
     <div className="forest-roots">
@@ -236,6 +267,7 @@ export function FamilyTreeView({
           selectedId={selectedId}
           matchIds={matchIds}
           onSelect={onSelect}
+          onAddRelative={onAddRelative}
         />
       ))}
     </div>

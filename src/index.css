@@ -28,7 +28,8 @@
 html,
 body,
 #root {
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -77,9 +78,11 @@ button {
 }
 
 .app {
-  min-height: 100vh;
+  height: 100%;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* —— Header —— */
@@ -90,11 +93,11 @@ button {
   gap: 1.25rem;
   padding: 1.1rem 1.75rem;
   border-bottom: 1px solid var(--line);
-  background: rgba(14, 26, 20, 0.72);
+  background: rgba(14, 26, 20, 0.85);
   backdrop-filter: blur(14px);
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 20;
+  flex-shrink: 0;
   animation: fadeDown 0.6s ease both;
 }
 
@@ -241,6 +244,7 @@ button {
   display: grid;
   grid-template-columns: 1fr minmax(280px, 340px);
   min-height: 0;
+  overflow: hidden;
 }
 
 .main.solo {
@@ -250,7 +254,7 @@ button {
 .tree-pane {
   padding: 1.5rem;
   overflow: auto;
-  min-height: 60vh;
+  min-height: 0;
 }
 
 .tree-canvas {
@@ -342,6 +346,36 @@ button {
   transition: transform 0.2s ease, border-color 0.2s, box-shadow 0.2s;
   animation: popIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
   cursor: pointer;
+}
+
+.person-card-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.45rem;
+  width: 168px;
+}
+
+.person-card-wrap .person-card {
+  width: 100%;
+}
+
+.card-add-btn {
+  width: 100%;
+  padding: 0.55rem 0.6rem;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: #1a1408;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+  animation: popIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.card-add-btn:hover {
+  filter: brightness(1.06);
 }
 
 .person-card:hover {
@@ -563,6 +597,8 @@ button {
   backdrop-filter: blur(16px);
   padding: 1.5rem 1.35rem;
   overflow-y: auto;
+  min-height: 0;
+  height: 100%;
   animation: slideIn 0.35s ease both;
 }
 
@@ -870,6 +906,10 @@ button {
   }
 
   .person-card {
+    width: 148px;
+  }
+
+  .person-card-wrap {
     width: 148px;
   }
 

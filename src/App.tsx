@@ -64,6 +64,18 @@ export default function App() {
     saveTree(tree)
   }, [tree])
 
+  useEffect(() => {
+    if (!selectedId) return
+    const card = document.querySelector(
+      `[data-person-id="${selectedId}"]`,
+    ) as HTMLElement | null
+    card?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'nearest',
+    })
+  }, [selectedId])
+
   const lastNames = useMemo(() => getUniqueLastNames(tree), [tree])
   const matched = useMemo(
     () => filterByLastName(tree, filter),
@@ -264,6 +276,9 @@ export default function App() {
                   selectedId={selectedId}
                   matchIds={matchIds}
                   onSelect={setSelectedId}
+                  onAddRelative={(id) =>
+                    setModal({ type: 'choose-relation', personId: id })
+                  }
                 />
               </div>
             </>
