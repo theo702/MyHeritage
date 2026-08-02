@@ -16,10 +16,11 @@ export function loadTree(): FamilyTree {
     if (!raw) return createEmptyTree()
     const parsed = JSON.parse(raw) as FamilyTree
     if (!parsed || !Array.isArray(parsed.people)) return createEmptyTree()
-    return {
+    const tree: FamilyTree = {
       people: parsed.people.map(normalizePerson),
       rootId: parsed.rootId ?? parsed.people[0]?.id ?? null,
     }
+    return healCoParents(tree)
   } catch {
     return createEmptyTree()
   }
@@ -140,12 +141,32 @@ function linkSpouses(a: Person, b: Person): void {
   if (!b.spouseIds.includes(a.id)) b.spouseIds.push(a.id)
 }
 
+/** Relie automatiquement les co-parents qui partagent des enfants. */
+export function healCoParents(tree: FamilyTree): FamilyTree {
+  const people = tree.people.map((p) => ({
+    ...p,
+    spouseIds: [...p.spouseIds],
+  }))
+
+  for (const child of people) {
+    if (child.fatherId && child.motherId) {
+      const father = people.find((p) => p.id === child.fatherId)
+      const mother = people.find((p) => p.id === child.motherId)
+      if (father && mother) linkSpouses(father, mother)
+    }
+  }
+
+  return { ...tree, people }
+}
+
 export function addRelative(
   tree: FamilyTree,
   selectedId: string,
   relation: RelationType,
   data: {
     firstName: string
+    secondName?: string
+    thirdName?: string
     lastName: string
     birthYear?: number
     deathYear?: number
@@ -169,15 +190,11 @@ export function addRelative(
   switch (relation) {
     case 'father': {
       next.gender = data.gender === 'unknown' ? 'male' : data.gender
-      if (selected.fatherId) {
-        const oldFather = people.find((p) => p.id === selected.fatherId)
-        if (oldFather) {
-          // Keep existing father; do not overwrite silently — replace link
-        }
-      }
       selected.fatherId = next.id
-      // Children already pointing to old father stay; selected now has new father
-      // Also attach siblings of selected to same father if they share mother
+      if (selected.motherId) {
+        const mother = people.find((p) => p.id === selected.motherId)
+        if (mother) linkSpouses(mother, next)
+      }
       for (const sibling of people) {
         if (
           sibling.id !== selected.id &&
@@ -194,6 +211,12 @@ export function addRelative(
     case 'mother': {
       next.gender = data.gender === 'unknown' ? 'female' : data.gender
       selected.motherId = next.id
+      // Relier au conjoint déjà connu (le père)
+      if (selected.fatherId) {
+        const father = people.find((p) => p.id === selected.fatherId)
+        if (father) linkSpouses(father, next)
+      }
+      // Fratrie partageant le même père → même mère
       for (const sibling of people) {
         if (
           sibling.id !== selected.id &&
@@ -242,7 +265,6 @@ export function addRelative(
     }
     case 'spouse': {
       linkSpouses(selected, next)
-      // Share children: children of selected without the other parent get next as parent
       for (const child of people) {
         if (child.fatherId === selected.id && !child.motherId) {
           child.motherId = next.id
@@ -255,10 +277,10 @@ export function addRelative(
     }
   }
 
-  return {
+  return healCoParents({
     people,
     rootId: tree.rootId ?? selectedId,
-  }
+  })
 }
 
 export function addFirstPerson(data: {
@@ -339,6 +361,38 @@ export interface TreeNode {
   children: TreeNode[]
 }
 
+/** Trouve le conjoint explicite, sinon le co-parent déduit des enfants. */
+function findPartner(tree: FamilyTree, person: Person): Person | undefined {
+  for (const id of person.spouseIds) {
+    const spouse = getPerson(tree, id)
+    if (spouse) return spouse
+  }
+
+  const children = getChildren(tree, person.id)
+  const counts = new Map<string, number>()
+  for (const child of children) {
+    const otherId =
+      child.fatherId === person.id
+        ? child.motherId
+        : child.motherId === person.id
+          ? child.fatherId
+          : null
+    if (otherId) {
+      counts.set(otherId, (counts.get(otherId) ?? 0) + 1)
+    }
+  }
+
+  let bestId: string | null = null
+  let bestCount = 0
+  for (const [id, count] of counts) {
+    if (count > bestCount) {
+      bestCount = count
+      bestId = id
+    }
+  }
+  return bestId ? getPerson(tree, bestId) : undefined
+}
+
 /**
  * Build a descendants tree from a root.
  * Couples are shown together; children hang under the couple.
@@ -353,21 +407,30 @@ export function buildDescendantTree(
   if (!person) return null
   visited.add(rootId)
 
-  const spouse = person.spouseIds
-    .map((id) => getPerson(tree, id))
-    .find(Boolean)
+  const partner = findPartner(tree, person)
+  // Prefer displaying father (male) on the left when possible
+  let displayPerson = person
+  let spouse = partner
+  if (partner && !visited.has(partner.id)) {
+    if (person.gender === 'female' && partner.gender === 'male') {
+      displayPerson = partner
+      spouse = person
+      visited.add(partner.id)
+    } else {
+      visited.add(partner.id)
+    }
+  } else if (partner && visited.has(partner.id)) {
+    // Partner already rendered elsewhere — don't show as dangling root
+    spouse = undefined
+  }
 
-  if (spouse) visited.add(spouse.id)
-
-  const childPeople = getChildren(tree, person.id)
+  const childPeople = getChildren(tree, displayPerson.id)
   if (spouse) {
-    const spouseChildren = getChildren(tree, spouse.id)
-    for (const c of spouseChildren) {
+    for (const c of getChildren(tree, spouse.id)) {
       if (!childPeople.find((x) => x.id === c.id)) childPeople.push(c)
     }
   }
 
-  // Stable sort by birth year then name
   childPeople.sort((a, b) => {
     const ya = a.birthYear ?? 9999
     const yb = b.birthYear ?? 9999
@@ -376,7 +439,7 @@ export function buildDescendantTree(
   })
 
   return {
-    person,
+    person: displayPerson,
     spouse,
     children: childPeople
       .map((c) => buildDescendantTree(tree, c.id, visited))
