@@ -98,7 +98,6 @@ function UnitView({
     <div
       className="pedigree-unit couple-unit"
       data-unit-id={`${unit.left.id},${unit.right.id}`}
-      data-couple={`${unit.left.id},${unit.right.id}`}
     >
       <PersonCard
         person={unit.left}
@@ -120,13 +119,8 @@ function UnitView({
 
 interface DrawnFamily {
   key: string
-  /** Centre du couple (milieu du trait conjugal) */
-  joinX: number
-  joinY: number
-  /** Extrêmités du trait entre les deux parents */
-  pairLeft: number
-  pairRight: number
   barY: number
+  parents: { x: number; bottom: number }[]
   children: { id: string; x: number; top: number }[]
 }
 
@@ -158,14 +152,20 @@ export function FamilyTreeView({
       const next: DrawnFamily[] = []
 
       for (const fam of layout.families) {
-        const parentEls = fam.parentIds
-          .map(
-            (id) =>
-              canvas.querySelector(
-                `[data-person-id="${id}"]`,
-              ) as HTMLElement | null,
-          )
-          .filter((el): el is HTMLElement => Boolean(el))
+        const parents = fam.parentIds
+          .map((id) => {
+            const el = canvas.querySelector(
+              `[data-person-id="${id}"]`,
+            ) as HTMLElement | null
+            if (!el) return null
+            const r = el.getBoundingClientRect()
+            return {
+              x: r.left + r.width / 2 - rootBox.left,
+              bottom: r.bottom - rootBox.top,
+            }
+          })
+          .filter((p): p is NonNullable<typeof p> => Boolean(p))
+          .sort((a, b) => a.x - b.x)
 
         const children = fam.childIds
           .map((id) => {
@@ -181,48 +181,15 @@ export function FamilyTreeView({
             }
           })
           .filter((c): c is NonNullable<typeof c> => Boolean(c))
+          .sort((a, b) => a.x - b.x)
 
-        if (parentEls.length === 0 || children.length === 0) continue
+        if (parents.length === 0 || children.length === 0) continue
 
-        const parentBoxes = parentEls.map((el) => {
-          const r = el.getBoundingClientRect()
-          return {
-            left: r.left - rootBox.left,
-            right: r.right - rootBox.left,
-            cx: r.left + r.width / 2 - rootBox.left,
-            bottom: r.bottom - rootBox.top,
-            midY: r.top + r.height * 0.55 - rootBox.top,
-          }
-        })
+        const parentBottom = Math.max(...parents.map((p) => p.bottom))
+        const childTop = Math.min(...children.map((c) => c.top))
+        const barY = parentBottom + (childTop - parentBottom) * 0.42
 
-        parentBoxes.sort((a, b) => a.cx - b.cx)
-
-        let joinX: number
-        let joinY: number
-
-        if (parentBoxes.length >= 2) {
-          // Point de départ au milieu entre les parents, sans trait conjugal
-          const left = parentBoxes[0]
-          const right = parentBoxes[parentBoxes.length - 1]
-          joinX = (left.cx + right.cx) / 2
-          joinY = Math.max(...parentBoxes.map((p) => p.bottom))
-        } else {
-          joinX = parentBoxes[0].cx
-          joinY = parentBoxes[0].bottom
-        }
-
-        const minChildTop = Math.min(...children.map((c) => c.top))
-        const barY = joinY + (minChildTop - joinY) * 0.45
-
-        next.push({
-          key: fam.key,
-          joinX,
-          joinY,
-          pairLeft: joinX,
-          pairRight: joinX,
-          barY,
-          children,
-        })
+        next.push({ key: fam.key, barY, parents, children })
       }
 
       setDrawn(next)
@@ -249,30 +216,34 @@ export function FamilyTreeView({
         aria-hidden
       >
         {drawn.map((fam) => {
-          const childXs = fam.children.map((c) => c.x)
-          const barLeft = Math.min(...childXs)
-          const barRight = Math.max(...childXs)
+          const allX = [
+            ...fam.parents.map((p) => p.x),
+            ...fam.children.map((c) => c.x),
+          ]
+          const barLeft = Math.min(...allX)
+          const barRight = Math.max(...allX)
 
           return (
             <g key={fam.key} className="pedigree-links">
-              {/* Descente depuis l’espace entre les parents (sans les relier) */}
-              <line
-                x1={fam.joinX}
-                y1={fam.joinY}
-                x2={fam.joinX}
-                y2={fam.barY}
-                className="pedigree-path"
-              />
-              {/* Barre horizontale (fratrie) */}
-              {fam.children.length > 1 && (
+              {/* Chaque parent descend jusqu’à la barre (pas de lien entre eux) */}
+              {fam.parents.map((p, i) => (
                 <line
-                  x1={barLeft}
-                  y1={fam.barY}
-                  x2={barRight}
+                  key={`p-${fam.key}-${i}`}
+                  x1={p.x}
+                  y1={p.bottom}
+                  x2={p.x}
                   y2={fam.barY}
                   className="pedigree-path"
                 />
-              )}
+              ))}
+              {/* Barre commune au-dessus des enfants */}
+              <line
+                x1={barLeft}
+                y1={fam.barY}
+                x2={barRight}
+                y2={fam.barY}
+                className="pedigree-path"
+              />
               {/* Descente vers chaque enfant */}
               {fam.children.map((child) => (
                 <line

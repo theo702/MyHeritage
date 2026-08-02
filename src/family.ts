@@ -706,14 +706,25 @@ export function buildGenerationLayout(tree: FamilyTree): GenerationLayout {
       })
 
     const units: GenUnit[] = []
-    for (const person of rowPeople) {
+    // Priorité : regrouper d’abord les co-parents qui ont des enfants ensemble
+    const remaining = [...rowPeople]
+    while (remaining.length > 0) {
+      const person = remaining.shift()!
       if (placed.has(person.id)) continue
+
       const partner = findPartner(tree, person)
+      const partnerIdx = partner
+        ? remaining.findIndex((p) => p.id === partner.id)
+        : -1
+
       if (
         partner &&
+        !placed.has(partner.id) &&
         gen.get(partner.id) === g &&
-        !placed.has(partner.id)
+        (partnerIdx >= 0 || rowPeople.some((p) => p.id === partner.id))
       ) {
+        // Retirer le partenaire de la file s’il y est encore
+        if (partnerIdx >= 0) remaining.splice(partnerIdx, 1)
         const [left, right] = orderPair(person, partner)
         units.push({
           key: `pair-${left.id}-${right.id}`,
