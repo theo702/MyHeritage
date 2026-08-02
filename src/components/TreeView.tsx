@@ -1,5 +1,10 @@
-import type { TreeNode } from '../family'
-import { displayName, lifespan } from '../family'
+import {
+  displayName,
+  givenNames,
+  lifespan,
+  shortDisplayName,
+  type TreeNode,
+} from '../family'
 import type { Person } from '../types'
 
 interface PersonCardProps {
@@ -24,6 +29,7 @@ function PersonCard({
   style,
 }: PersonCardProps) {
   const years = lifespan(person)
+  const hasExtraNames = Boolean(person.secondName || person.thirdName)
   return (
     <button
       type="button"
@@ -34,7 +40,10 @@ function PersonCard({
       aria-label={displayName(person)}
     >
       <div className={`person-avatar ${person.gender}`}>{initials(person)}</div>
-      <p className="person-name">{displayName(person)}</p>
+      <p className="person-name">{shortDisplayName(person)}</p>
+      {hasExtraNames && (
+        <p className="person-given">{givenNames(person)}</p>
+      )}
       {years && <p className="person-meta">{years}</p>}
     </button>
   )

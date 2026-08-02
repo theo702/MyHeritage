@@ -330,6 +330,8 @@ export default function App() {
           submitLabel="Enregistrer"
           initial={{
             firstName: modalPerson.firstName,
+            secondName: modalPerson.secondName,
+            thirdName: modalPerson.thirdName,
             lastName: modalPerson.lastName,
             birthYear: modalPerson.birthYear,
             deathYear: modalPerson.deathYear,

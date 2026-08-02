@@ -3,6 +3,7 @@ import {
   getChildren,
   getPerson,
   getSiblings,
+  givenNames,
   lifespan,
 } from '../family'
 import type { FamilyTree, Person } from '../types'
@@ -42,7 +43,16 @@ export function SidePanel({
       <div className="panel-header">
         <div>
           <h2>{displayName(person)}</h2>
-          <p className="sub">{years || 'Dates non renseignées'}</p>
+          <p className="sub">
+            {[
+              person.secondName || person.thirdName
+                ? `Prénoms : ${givenNames(person)}`
+                : null,
+              years || 'Dates non renseignées',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
         </div>
         <button
           type="button"

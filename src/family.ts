@@ -29,9 +29,16 @@ export function saveTree(tree: FamilyTree): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tree))
 }
 
+function cleanOptionalName(value?: string): string | undefined {
+  const trimmed = value?.trim()
+  return trimmed || undefined
+}
+
 function normalizePerson(person: Person): Person {
   return {
     ...person,
+    secondName: cleanOptionalName(person.secondName),
+    thirdName: cleanOptionalName(person.thirdName),
     spouseIds: person.spouseIds ?? [],
     fatherId: person.fatherId ?? null,
     motherId: person.motherId ?? null,
@@ -44,6 +51,8 @@ export function createPerson(
   return {
     id: createId(),
     firstName: data.firstName.trim(),
+    secondName: cleanOptionalName(data.secondName),
+    thirdName: cleanOptionalName(data.thirdName),
     lastName: data.lastName.trim(),
     birthYear: data.birthYear,
     deathYear: data.deathYear,
@@ -88,7 +97,19 @@ export function filterByLastName(tree: FamilyTree, lastName: string): Person[] {
   return tree.people.filter((p) => p.lastName.toLowerCase().includes(query))
 }
 
+export function givenNames(person: Person): string {
+  return [person.firstName, person.secondName, person.thirdName]
+    .map((n) => n?.trim())
+    .filter(Boolean)
+    .join(' ')
+}
+
 export function displayName(person: Person): string {
+  return `${givenNames(person)} ${person.lastName}`.trim()
+}
+
+/** Nom court pour les cartes : 1er prénom + nom */
+export function shortDisplayName(person: Person): string {
   return `${person.firstName} ${person.lastName}`.trim()
 }
 
@@ -269,6 +290,14 @@ export function updatePerson(
             ...p,
             ...patch,
             firstName: patch.firstName?.trim() ?? p.firstName,
+            secondName:
+              patch.secondName !== undefined
+                ? cleanOptionalName(patch.secondName)
+                : p.secondName,
+            thirdName:
+              patch.thirdName !== undefined
+                ? cleanOptionalName(patch.thirdName)
+                : p.thirdName,
             lastName: patch.lastName?.trim() ?? p.lastName,
             notes: patch.notes?.trim() || undefined,
           }

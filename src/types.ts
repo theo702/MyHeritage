@@ -12,6 +12,10 @@ export type RelationType =
 export interface Person {
   id: string
   firstName: string
+  /** Deuxième prénom (optionnel) */
+  secondName?: string
+  /** Troisième prénom (optionnel) */
+  thirdName?: string
   lastName: string
   birthYear?: number
   deathYear?: number

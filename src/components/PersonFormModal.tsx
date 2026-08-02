@@ -1,10 +1,12 @@
 import type { Gender, Person, RelationType } from '../types'
 import { GENDER_LABELS, RELATION_LABELS } from '../types'
-import { defaultGenderForRelation } from '../family'
+import { defaultGenderForRelation, displayName } from '../family'
 import { useEffect, useId, useState } from 'react'
 
 export interface PersonFormData {
   firstName: string
+  secondName?: string
+  thirdName?: string
   lastName: string
   birthYear?: number
   deathYear?: number
@@ -35,6 +37,8 @@ export function PersonFormModal({
 }: PersonFormModalProps) {
   const formId = useId()
   const [firstName, setFirstName] = useState(initial?.firstName ?? '')
+  const [secondName, setSecondName] = useState(initial?.secondName ?? '')
+  const [thirdName, setThirdName] = useState(initial?.thirdName ?? '')
   const [lastName, setLastName] = useState(
     initial?.lastName ?? defaultLastName,
   )
@@ -63,6 +67,8 @@ export function PersonFormModal({
     if (!firstName.trim() || !lastName.trim()) return
     onSubmit({
       firstName: firstName.trim(),
+      secondName: secondName.trim() || undefined,
+      thirdName: thirdName.trim() || undefined,
       lastName: lastName.trim(),
       birthYear: birthYear ? Number(birthYear) : undefined,
       deathYear: deathYear ? Number(deathYear) : undefined,
@@ -84,28 +90,46 @@ export function PersonFormModal({
         {subtitle && <p className="sub">{subtitle}</p>}
         <form onSubmit={handleSubmit}>
           <div className="form-grid">
+            <div className="field">
+              <label htmlFor={`${formId}-fn`}>1er prénom</label>
+              <input
+                id={`${formId}-fn`}
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                autoFocus
+                required
+                placeholder="Jean"
+              />
+            </div>
             <div className="form-row">
               <div className="field">
-                <label htmlFor={`${formId}-fn`}>Prénom</label>
+                <label htmlFor={`${formId}-sn`}>2e prénom</label>
                 <input
-                  id={`${formId}-fn`}
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  autoFocus
-                  required
-                  placeholder="Jean"
+                  id={`${formId}-sn`}
+                  value={secondName}
+                  onChange={(e) => setSecondName(e.target.value)}
+                  placeholder="optionnel"
                 />
               </div>
               <div className="field">
-                <label htmlFor={`${formId}-ln`}>Nom de famille</label>
+                <label htmlFor={`${formId}-tn`}>3e prénom</label>
                 <input
-                  id={`${formId}-ln`}
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                  placeholder="Dupont"
+                  id={`${formId}-tn`}
+                  value={thirdName}
+                  onChange={(e) => setThirdName(e.target.value)}
+                  placeholder="optionnel"
                 />
               </div>
+            </div>
+            <div className="field">
+              <label htmlFor={`${formId}-ln`}>Nom de famille</label>
+              <input
+                id={`${formId}-ln`}
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+                placeholder="Dupont"
+              />
             </div>
             <div className="form-row">
               <div className="field">
@@ -202,11 +226,7 @@ export function AddRelativeChooser({
       >
         <h2>Ajouter un membre</h2>
         <p className="sub">
-          Qui est cette personne pour{' '}
-          <strong>
-            {selected.firstName} {selected.lastName}
-          </strong>{' '}
-          ?
+          Qui est cette personne pour <strong>{displayName(selected)}</strong> ?
         </p>
         <div className="relation-grid">
           {relations.map((r) => (
