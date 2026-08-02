@@ -859,35 +859,24 @@ button {
 
 .gen-link-badge {
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.15rem;
-  padding: 0.35rem 0.55rem;
+  padding: 0.2rem 0.55rem;
   border-radius: 999px;
-  background: rgba(14, 26, 20, 0.92);
-  border: 1px solid rgba(196, 163, 90, 0.45);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(8px);
-  line-height: 1.15;
+  background: rgba(14, 26, 20, 0.94);
+  border: 1px solid rgba(196, 163, 90, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  line-height: 1;
   text-align: center;
 }
 
-.gen-link-badge .up,
-.gen-link-badge .down {
-  font-size: 0.62rem;
+.gen-link-badge span {
+  font-size: 0.6rem;
   font-weight: 600;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.gen-link-badge .up {
-  color: var(--ink-soft);
-}
-
-.gen-link-badge .down {
   color: var(--accent-strong);
+  white-space: nowrap;
 }
 
 .gen-rows {
@@ -896,15 +885,24 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5.5rem;
+  gap: 6rem;
 }
 
 .gen-row {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  gap: 2.25rem;
+  gap: 2.75rem;
   flex-wrap: wrap;
+}
+
+.couple {
+  display: flex;
+  align-items: stretch;
+  gap: 0.55rem;
+  position: relative;
+  z-index: 2;
+  padding: 0 0.35rem;
 }
 
 .relation-link.parents-link {

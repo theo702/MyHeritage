@@ -362,13 +362,8 @@ export interface TreeNode {
   children: TreeNode[]
 }
 
-/** Trouve le co-parent (lien explicite ou déduit des enfants). */
+/** Trouve le co-parent (enfants d’abord, puis lien explicite). */
 function findPartner(tree: FamilyTree, person: Person): Person | undefined {
-  for (const id of person.spouseIds) {
-    const spouse = getPerson(tree, id)
-    if (spouse) return spouse
-  }
-
   const children = getChildren(tree, person.id)
   const counts = new Map<string, number>()
   for (const child of children) {
@@ -391,7 +386,17 @@ function findPartner(tree: FamilyTree, person: Person): Person | undefined {
       bestId = id
     }
   }
-  return bestId ? getPerson(tree, bestId) : undefined
+  if (bestId) {
+    const fromKids = getPerson(tree, bestId)
+    if (fromKids) return fromKids
+  }
+
+  for (const id of person.spouseIds) {
+    const spouse = getPerson(tree, id)
+    if (spouse) return spouse
+  }
+
+  return undefined
 }
 
 function bloodDescendantCount(tree: FamilyTree, personId: string): number {
@@ -591,8 +596,12 @@ export type GenUnit =
 
 export interface GenerationLayout {
   generations: GenUnit[][]
-  /** Liens parent → enfant */
-  links: { parentId: string; childId: string }[]
+  /** Un groupe = enfants d’un même couple parental */
+  families: {
+    key: string
+    parentIds: string[]
+    childIds: string[]
+  }[]
 }
 
 function computeGenerationMap(tree: FamilyTree): Map<string, number> {
@@ -625,7 +634,6 @@ function computeGenerationMap(tree: FamilyTree): Map<string, number> {
       }
     }
 
-    // Co-parents sur la même génération
     for (const p of tree.people) {
       const partner = findPartner(tree, p)
       if (!partner) continue
@@ -656,21 +664,41 @@ function orderPair(a: Person, b: Person): [Person, Person] {
   return displayName(a).localeCompare(displayName(b), 'fr') <= 0 ? [a, b] : [b, a]
 }
 
-/** Rangées : génération 0 (aïeux) en haut → descendants en bas. */
+function parentSortKey(
+  person: Person,
+  indexOf: Map<string, number>,
+): number {
+  const indexes: number[] = []
+  if (person.fatherId && indexOf.has(person.fatherId)) {
+    indexes.push(indexOf.get(person.fatherId)!)
+  }
+  if (person.motherId && indexOf.has(person.motherId)) {
+    indexes.push(indexOf.get(person.motherId)!)
+  }
+  if (indexes.length === 0) return 9999
+  return indexes.reduce((a, b) => a + b, 0) / indexes.length
+}
+
+/** Rangées ordonnées sous les parents pour limiter les croisements. */
 export function buildGenerationLayout(tree: FamilyTree): GenerationLayout {
   if (tree.people.length === 0) {
-    return { generations: [], links: [] }
+    return { generations: [], families: [] }
   }
 
   const gen = computeGenerationMap(tree)
   const maxGen = Math.max(0, ...gen.values())
   const placed = new Set<string>()
   const generations: GenUnit[][] = []
+  const indexOf = new Map<string, number>()
+  let globalIndex = 0
 
   for (let g = 0; g <= maxGen; g++) {
     const rowPeople = tree.people
       .filter((p) => gen.get(p.id) === g)
       .sort((a, b) => {
+        const ka = parentSortKey(a, indexOf)
+        const kb = parentSortKey(b, indexOf)
+        if (ka !== kb) return ka - kb
         const ya = a.birthYear ?? 9999
         const yb = b.birthYear ?? 9999
         if (ya !== yb) return ya - yb
@@ -695,26 +723,53 @@ export function buildGenerationLayout(tree: FamilyTree): GenerationLayout {
         })
         placed.add(left.id)
         placed.add(right.id)
+        indexOf.set(left.id, globalIndex++)
+        indexOf.set(right.id, globalIndex++)
       } else {
         units.push({ key: `solo-${person.id}`, kind: 'single', person })
         placed.add(person.id)
+        indexOf.set(person.id, globalIndex++)
       }
     }
     if (units.length > 0) generations.push(units)
   }
 
-  const links: { parentId: string; childId: string }[] = []
   const ids = new Set(tree.people.map((p) => p.id))
+  const familyMap = new Map<
+    string,
+    { key: string; parentIds: string[]; childIds: string[] }
+  >()
+
   for (const child of tree.people) {
-    if (child.fatherId && ids.has(child.fatherId)) {
-      links.push({ parentId: child.fatherId, childId: child.id })
-    }
-    if (child.motherId && ids.has(child.motherId)) {
-      links.push({ parentId: child.motherId, childId: child.id })
+    const parentIds = [child.fatherId, child.motherId].filter(
+      (id): id is string => Boolean(id && ids.has(id)),
+    )
+    if (parentIds.length === 0) continue
+    const key = [...parentIds].sort().join('+')
+    const existing = familyMap.get(key)
+    if (existing) {
+      if (!existing.childIds.includes(child.id)) existing.childIds.push(child.id)
+    } else {
+      familyMap.set(key, {
+        key,
+        parentIds: [...new Set(parentIds)],
+        childIds: [child.id],
+      })
     }
   }
 
-  return { generations, links }
+  for (const fam of familyMap.values()) {
+    fam.childIds.sort((a, b) => {
+      const pa = getPerson(tree, a)!
+      const pb = getPerson(tree, b)!
+      const ya = pa.birthYear ?? 9999
+      const yb = pb.birthYear ?? 9999
+      if (ya !== yb) return ya - yb
+      return displayName(pa).localeCompare(displayName(pb), 'fr')
+    })
+  }
+
+  return { generations, families: Array.from(familyMap.values()) }
 }
 
 export function parentLabelFor(person: Person): string {
