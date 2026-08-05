@@ -147,6 +147,20 @@ button {
   font-weight: 300;
 }
 
+.sync-dot {
+  color: var(--accent);
+  font-weight: 400;
+}
+
+.sync-dot.sync-offline,
+.sync-dot.sync-error {
+  color: #e8a0a0;
+}
+
+.sync-dot.sync-saving {
+  color: var(--ink-soft);
+}
+
 .topbar-actions {
   display: flex;
   align-items: center;

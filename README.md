@@ -4,13 +4,15 @@ Application personnelle pour construire et explorer ton arbre généalogique.
 
 **En ligne :** [myheritagefamily.netlify.app](https://myheritagefamily.netlify.app)
 
+L’arbre est **partagé** : tout le monde voit et peut modifier le même arbre, sans compte ni code. Les données sont stockées sur Netlify Blobs.
+
 ## Fonctionnalités
 
-- Vue arbre des descendants (couples + enfants)
+- Vue arbre par générations
 - Filtrer par nom de famille
-- Cliquer sur une personne → ajouter père, mère, frère, sœur, fils, fille ou conjoint
+- Ajouter père, mère, frère, sœur, fils ou fille
 - Modifier / supprimer une personne
-- Données sauvegardées dans le navigateur (`localStorage`)
+- Synchronisation cloud (accessible partout)
 
 ## Démarrer en local
 
@@ -19,15 +21,14 @@ npm install
 npm run dev
 ```
 
-Build de production :
+En local sans Netlify, la sync cloud est indisponible et le mode hors-ligne (localStorage) est utilisé. Pour tester l’API :
 
 ```bash
-npm run build
-npm run preview
+npx netlify dev
 ```
 
 ## Déploiement Netlify
 
 - **Build command :** `npm run build`
 - **Publish directory :** `dist`
-- Branche à déployer : celle qui contient l’app (fusionne la PR dans `main`, ou pointe Netlify vers cette branche)
+- **Functions :** `netlify/functions`

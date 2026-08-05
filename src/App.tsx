@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AddRelativeChooser,
   PersonFormModal,
@@ -9,15 +9,15 @@ import { FamilyTreeView } from './components/TreeView'
 import {
   addFirstPerson,
   addRelative,
+  createEmptyTree,
   deletePerson,
   displayName,
   filterByLastName,
   getChildren,
   getUniqueLastNames,
-  loadTree,
-  saveTree,
   updatePerson,
 } from './family'
+import { fetchSharedTree, pushSharedTree, type SyncStatus } from './sync'
 import type { FamilyTree, RelationType } from './types'
 import { RELATION_LABELS } from './types'
 
@@ -52,15 +52,47 @@ function BrandMark() {
 }
 
 export default function App() {
-  const [tree, setTree] = useState<FamilyTree>(() => loadTree())
+  const [tree, setTree] = useState<FamilyTree>(() => createEmptyTree())
+  const [ready, setReady] = useState(false)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [filter, setFilter] = useState('')
   const [viewRootId, setViewRootId] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>({ type: 'none' })
+  const skipNextSave = useRef(true)
+  const saveTimer = useRef<number | null>(null)
 
   useEffect(() => {
-    saveTree(tree)
-  }, [tree])
+    let cancelled = false
+    ;(async () => {
+      const { tree: shared, status } = await fetchSharedTree()
+      if (cancelled) return
+      skipNextSave.current = true
+      setTree(shared)
+      setSyncStatus(status)
+      setReady(true)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!ready) return
+    if (skipNextSave.current) {
+      skipNextSave.current = false
+      return
+    }
+    if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    setSyncStatus((s) => (s === 'offline' ? 'offline' : 'saving'))
+    saveTimer.current = window.setTimeout(async () => {
+      const ok = await pushSharedTree(tree)
+      setSyncStatus(ok ? 'online' : 'offline')
+    }, 450)
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current)
+    }
+  }, [tree, ready])
 
   useEffect(() => {
     if (!selectedId) return
@@ -161,7 +193,16 @@ export default function App() {
           <BrandMark />
           <div className="brand-text">
             <h1 className="brand-name">Héritage</h1>
-            <p className="brand-tag">Ton arbre généalogique personnel</p>
+            <p className="brand-tag">
+              Ton arbre généalogique personnel
+              <span className={`sync-dot sync-${syncStatus}`}>
+                {syncStatus === 'loading' && ' · Chargement…'}
+                {syncStatus === 'online' && ' · Partagé en ligne'}
+                {syncStatus === 'saving' && ' · Enregistrement…'}
+                {syncStatus === 'offline' && ' · Hors ligne (local)'}
+                {syncStatus === 'error' && ' · Erreur sync'}
+              </span>
+            </p>
           </div>
         </div>
 
@@ -223,13 +264,20 @@ export default function App() {
 
       <div className={`main${selected ? '' : ' solo'}`}>
         <section className="tree-pane">
-          {tree.people.length === 0 ? (
+          {!ready ? (
+            <div className="empty-state">
+              <BrandMark />
+              <h2>Héritage</h2>
+              <p>Chargement de l’arbre partagé…</p>
+            </div>
+          ) : tree.people.length === 0 ? (
             <div className="empty-state">
               <BrandMark />
               <h2>Héritage</h2>
               <p>
                 Commence ton arbre en ajoutant la première personne — toi, un
-                grand-parent, ou quiconque ouvre ta lignée.
+                grand-parent, ou quiconque ouvre ta lignée. L’arbre sera visible
+                pour tout le monde sur ce site.
               </p>
               <button
                 type="button"

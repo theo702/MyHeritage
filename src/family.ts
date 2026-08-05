@@ -14,13 +14,7 @@ export function loadTree(): FamilyTree {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return createEmptyTree()
-    const parsed = JSON.parse(raw) as FamilyTree
-    if (!parsed || !Array.isArray(parsed.people)) return createEmptyTree()
-    const tree: FamilyTree = {
-      people: parsed.people.map(normalizePerson),
-      rootId: parsed.rootId ?? parsed.people[0]?.id ?? null,
-    }
-    return healCoParents(tree)
+    return parseTree(JSON.parse(raw))
   } catch {
     return createEmptyTree()
   }
@@ -28,6 +22,16 @@ export function loadTree(): FamilyTree {
 
 export function saveTree(tree: FamilyTree): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(tree))
+}
+
+export function parseTree(raw: unknown): FamilyTree {
+  const parsed = raw as FamilyTree
+  if (!parsed || !Array.isArray(parsed.people)) return createEmptyTree()
+  const tree: FamilyTree = {
+    people: parsed.people.map(normalizePerson),
+    rootId: parsed.rootId ?? parsed.people[0]?.id ?? null,
+  }
+  return healCoParents(tree)
 }
 
 function cleanOptionalName(value?: string): string | undefined {
