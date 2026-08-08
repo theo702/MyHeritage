@@ -64,6 +64,7 @@ export function PersonFormModal({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    e.stopPropagation()
     if (!firstName.trim() || !lastName.trim()) return
     onSubmit({
       firstName: firstName.trim(),
@@ -78,7 +79,13 @@ export function PersonFormModal({
   }
 
   return (
-    <div className="overlay" onClick={onClose} role="presentation">
+    <div
+      className="overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+      role="presentation"
+    >
       <div
         className="modal"
         role="dialog"
@@ -96,8 +103,13 @@ export function PersonFormModal({
                 id={`${formId}-fn`}
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
-                autoFocus
+                autoFocus={
+                  typeof window !== 'undefined' &&
+                  window.matchMedia('(min-width: 901px)').matches
+                }
                 required
+                enterKeyHint="next"
+                autoComplete="given-name"
                 placeholder="Jean"
               />
             </div>
@@ -128,6 +140,8 @@ export function PersonFormModal({
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
                 required
+                enterKeyHint="done"
+                autoComplete="family-name"
                 placeholder="Dupont"
               />
             </div>
@@ -137,6 +151,7 @@ export function PersonFormModal({
                 <input
                   id={`${formId}-by`}
                   type="number"
+                  inputMode="numeric"
                   value={birthYear}
                   onChange={(e) => setBirthYear(e.target.value)}
                   placeholder="1950"
@@ -149,6 +164,7 @@ export function PersonFormModal({
                 <input
                   id={`${formId}-dy`}
                   type="number"
+                  inputMode="numeric"
                   value={deathYear}
                   onChange={(e) => setDeathYear(e.target.value)}
                   placeholder="optionnel"
@@ -185,7 +201,11 @@ export function PersonFormModal({
             <button type="button" className="btn btn-ghost" onClick={onClose}>
               Annuler
             </button>
-            <button type="submit" className="btn btn-primary">
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={!firstName.trim() || !lastName.trim()}
+            >
               {submitLabel}
             </button>
           </div>
@@ -217,7 +237,13 @@ export function AddRelativeChooser({
   const relations = ADDABLE_RELATIONS
 
   return (
-    <div className="overlay" onClick={onClose} role="presentation">
+    <div
+      className="overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+      role="presentation"
+    >
       <div
         className="modal"
         role="dialog"
