@@ -41,8 +41,9 @@ body {
     radial-gradient(ellipse 70% 50% at 95% 10%, rgba(196, 163, 90, 0.12), transparent 50%),
     radial-gradient(ellipse 60% 40% at 50% 100%, rgba(28, 50, 38, 0.9), transparent 60%),
     linear-gradient(165deg, var(--bg-deep) 0%, var(--bg-mid) 45%, #101c16 100%);
-  background-attachment: fixed;
+  background-attachment: scroll;
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
 }
 
 body::before {
@@ -993,32 +994,36 @@ button {
 }
 
 @media (max-width: 900px) {
+  /* Coque app : le swipe se fait dans .tree-pane, pas sur le document */
   html,
   body,
   #root {
-    height: auto;
-    min-height: 100%;
-    overflow-x: auto;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
   }
 
   .app {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
   }
 
   .main {
-    grid-template-columns: 1fr;
-    overflow: visible;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
     min-height: 0;
   }
 
   .tree-pane {
-    overflow: visible;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: auto;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
     padding-bottom: 2.5rem;
-    touch-action: manipulation;
   }
 
   /* Laisse de la place quand la fiche est ouverte en bas */
@@ -1027,7 +1032,9 @@ button {
   }
 
   .tree-canvas,
-  .gen-tree {
+  .gen-tree,
+  .person-card,
+  .person-card-wrap {
     touch-action: pan-x pan-y;
   }
 
@@ -1050,8 +1057,8 @@ button {
   .topbar {
     padding: 1rem;
     flex-wrap: wrap;
-    position: sticky;
-    top: 0;
+    position: relative;
+    top: auto;
   }
 
   .brand-name {
