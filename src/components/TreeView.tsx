@@ -1,11 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useMemo } from 'react'
 import {
-  buildGenerationLayout,
+  LAYOUT,
+  buildPositionedLayout,
   displayName,
   givenNames,
   lifespan,
   shortDisplayName,
-  type GenUnit,
 } from '../family'
 import type { FamilyTree, Person } from '../types'
 
@@ -13,6 +13,8 @@ interface PersonCardProps {
   person: Person
   selected: boolean
   dimmed: boolean
+  cx: number
+  top: number
   onSelect: (id: string) => void
   onAddRelative?: (id: string) => void
 }
@@ -27,13 +29,25 @@ function PersonCard({
   person,
   selected,
   dimmed,
+  cx,
+  top,
   onSelect,
   onAddRelative,
 }: PersonCardProps) {
   const years = lifespan(person)
   const hasExtraNames = Boolean(person.secondName || person.thirdName)
+  const left = cx - LAYOUT.cardW / 2
+
   return (
-    <div className={`person-card-wrap${selected ? ' is-selected' : ''}`}>
+    <div
+      className={`person-card-wrap${selected ? ' is-selected' : ''}`}
+      style={{
+        position: 'absolute',
+        left,
+        top,
+        width: LAYOUT.cardW,
+      }}
+    >
       <button
         type="button"
         className={`person-card${selected ? ' selected' : ''}${dimmed ? ' dimmed' : ''}`}
@@ -48,6 +62,11 @@ function PersonCard({
           <p className="person-given">{givenNames(person)}</p>
         )}
         {years && <p className="person-meta">{years}</p>}
+        {person.notes && (
+          <p className="person-note" title={person.notes}>
+            {person.notes}
+          </p>
+        )}
       </button>
       {selected && onAddRelative && (
         <button
@@ -65,65 +84,6 @@ function PersonCard({
   )
 }
 
-function UnitView({
-  unit,
-  selectedId,
-  matchIds,
-  onSelect,
-  onAddRelative,
-}: {
-  unit: GenUnit
-  selectedId: string | null
-  matchIds: Set<string> | null
-  onSelect: (id: string) => void
-  onAddRelative?: (id: string) => void
-}) {
-  const isDimmed = (id: string) => matchIds !== null && !matchIds.has(id)
-
-  if (unit.kind === 'single') {
-    return (
-      <div className="pedigree-unit" data-unit-id={unit.person.id}>
-        <PersonCard
-          person={unit.person}
-          selected={selectedId === unit.person.id}
-          dimmed={isDimmed(unit.person.id)}
-          onSelect={onSelect}
-          onAddRelative={onAddRelative}
-        />
-      </div>
-    )
-  }
-
-  return (
-    <div
-      className="pedigree-unit couple-unit"
-      data-unit-id={`${unit.left.id},${unit.right.id}`}
-    >
-      <PersonCard
-        person={unit.left}
-        selected={selectedId === unit.left.id}
-        dimmed={isDimmed(unit.left.id)}
-        onSelect={onSelect}
-        onAddRelative={onAddRelative}
-      />
-      <PersonCard
-        person={unit.right}
-        selected={selectedId === unit.right.id}
-        dimmed={isDimmed(unit.right.id)}
-        onSelect={onSelect}
-        onAddRelative={onAddRelative}
-      />
-    </div>
-  )
-}
-
-interface DrawnFamily {
-  key: string
-  barY: number
-  parents: { x: number; bottom: number }[]
-  children: { id: string; x: number; top: number }[]
-}
-
 export function FamilyTreeView({
   tree,
   selectedId,
@@ -137,120 +97,70 @@ export function FamilyTreeView({
   onSelect: (id: string) => void
   onAddRelative?: (id: string) => void
 }) {
-  const layout = useMemo(() => buildGenerationLayout(tree), [tree])
-  const canvasRef = useRef<HTMLDivElement>(null)
-  const [drawn, setDrawn] = useState<DrawnFamily[]>([])
-  const [size, setSize] = useState({ w: 0, h: 0 })
+  const layout = useMemo(() => buildPositionedLayout(tree), [tree])
 
-  useLayoutEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
+  if (layout.nodes.length === 0) return null
 
-    const measure = () => {
-      const rootBox = canvas.getBoundingClientRect()
-      setSize({ w: canvas.scrollWidth, h: canvas.scrollHeight })
-      const next: DrawnFamily[] = []
-
-      for (const fam of layout.families) {
-        const parents = fam.parentIds
-          .map((id) => {
-            const el = canvas.querySelector(
-              `[data-person-id="${id}"]`,
-            ) as HTMLElement | null
-            if (!el) return null
-            const r = el.getBoundingClientRect()
-            return {
-              x: r.left + r.width / 2 - rootBox.left,
-              bottom: r.bottom - rootBox.top,
-            }
-          })
-          .filter((p): p is NonNullable<typeof p> => Boolean(p))
-          .sort((a, b) => a.x - b.x)
-
-        const children = fam.childIds
-          .map((id) => {
-            const el = canvas.querySelector(
-              `[data-person-id="${id}"]`,
-            ) as HTMLElement | null
-            if (!el) return null
-            const r = el.getBoundingClientRect()
-            return {
-              id,
-              x: r.left + r.width / 2 - rootBox.left,
-              top: r.top - rootBox.top,
-            }
-          })
-          .filter((c): c is NonNullable<typeof c> => Boolean(c))
-          .sort((a, b) => a.x - b.x)
-
-        if (parents.length === 0 || children.length === 0) continue
-
-        const parentBottom = Math.max(...parents.map((p) => p.bottom))
-        const childTop = Math.min(...children.map((c) => c.top))
-        const barY = parentBottom + (childTop - parentBottom) * 0.42
-
-        next.push({ key: fam.key, barY, parents, children })
-      }
-
-      setDrawn(next)
-    }
-
-    measure()
-    const ro = new ResizeObserver(measure)
-    ro.observe(canvas)
-    window.addEventListener('resize', measure)
-    return () => {
-      ro.disconnect()
-      window.removeEventListener('resize', measure)
-    }
-  }, [layout, tree, selectedId])
-
-  if (layout.generations.length === 0) return null
+  const isDimmed = (id: string) => matchIds !== null && !matchIds.has(id)
 
   return (
-    <div className="gen-tree pedigree" ref={canvasRef}>
+    <div
+      className="gen-tree pedigree"
+      style={{ width: layout.width, height: layout.height }}
+    >
       <svg
         className="gen-links"
-        width={size.w}
-        height={size.h}
+        width={layout.width}
+        height={layout.height}
         aria-hidden
       >
-        {drawn.map((fam) => {
-          const allX = [
-            ...fam.parents.map((p) => p.x),
-            ...fam.children.map((c) => c.x),
+        {layout.families.map((fam) => {
+          const parents = fam.parentIds
+            .map((id) => layout.byId.get(id))
+            .filter((n): n is NonNullable<typeof n> => Boolean(n))
+          const children = fam.childIds
+            .map((id) => layout.byId.get(id))
+            .filter((n): n is NonNullable<typeof n> => Boolean(n))
+
+          if (parents.length === 0 || children.length === 0) return null
+
+          const parentBottom = Math.max(
+            ...parents.map((p) => p.top + LAYOUT.cardH),
+          )
+          const childTop = Math.min(...children.map((c) => c.top))
+          const barY = parentBottom + (childTop - parentBottom) * 0.45
+          const xs = [
+            ...parents.map((p) => p.cx),
+            ...children.map((c) => c.cx),
           ]
-          const barLeft = Math.min(...allX)
-          const barRight = Math.max(...allX)
+          const barLeft = Math.min(...xs)
+          const barRight = Math.max(...xs)
 
           return (
             <g key={fam.key} className="pedigree-links">
-              {/* Chaque parent descend jusqu’à la barre (pas de lien entre eux) */}
-              {fam.parents.map((p, i) => (
+              {parents.map((p) => (
                 <line
-                  key={`p-${fam.key}-${i}`}
-                  x1={p.x}
-                  y1={p.bottom}
-                  x2={p.x}
-                  y2={fam.barY}
+                  key={`p-${fam.key}-${p.person.id}`}
+                  x1={p.cx}
+                  y1={p.top + LAYOUT.cardH}
+                  x2={p.cx}
+                  y2={barY}
                   className="pedigree-path"
                 />
               ))}
-              {/* Barre commune au-dessus des enfants */}
               <line
                 x1={barLeft}
-                y1={fam.barY}
+                y1={barY}
                 x2={barRight}
-                y2={fam.barY}
+                y2={barY}
                 className="pedigree-path"
               />
-              {/* Descente vers chaque enfant */}
-              {fam.children.map((child) => (
+              {children.map((child) => (
                 <line
-                  key={child.id}
-                  x1={child.x}
-                  y1={fam.barY}
-                  x2={child.x}
+                  key={`c-${fam.key}-${child.person.id}`}
+                  x1={child.cx}
+                  y1={barY}
+                  x2={child.cx}
                   y2={child.top}
                   className="pedigree-path"
                 />
@@ -260,22 +170,18 @@ export function FamilyTreeView({
         })}
       </svg>
 
-      <div className="gen-rows">
-        {layout.generations.map((row, index) => (
-          <div className="gen-row" key={`gen-${index}`}>
-            {row.map((unit) => (
-              <UnitView
-                key={unit.key}
-                unit={unit}
-                selectedId={selectedId}
-                matchIds={matchIds}
-                onSelect={onSelect}
-                onAddRelative={onAddRelative}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
+      {layout.nodes.map((node) => (
+        <PersonCard
+          key={node.person.id}
+          person={node.person}
+          cx={node.cx}
+          top={node.top}
+          selected={selectedId === node.person.id}
+          dimmed={isDimmed(node.person.id)}
+          onSelect={onSelect}
+          onAddRelative={onAddRelative}
+        />
+      ))}
     </div>
   )
 }

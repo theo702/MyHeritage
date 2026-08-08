@@ -592,7 +592,7 @@ export function buildForest(tree: FamilyTree): TreeNode[] {
   return nodes
 }
 
-// —— Layout par générations (affichage fiable) ——
+// —— Layout positionné (enfants centrés sous les parents) ——
 
 export type GenUnit =
   | { key: string; kind: 'single'; person: Person }
@@ -600,7 +600,6 @@ export type GenUnit =
 
 export interface GenerationLayout {
   generations: GenUnit[][]
-  /** Un groupe = enfants d’un même couple parental */
   families: {
     key: string
     parentIds: string[]
@@ -608,19 +607,53 @@ export interface GenerationLayout {
   }[]
 }
 
-function computeGenerationMap(tree: FamilyTree): Map<string, number> {
-  const gen = new Map<string, number>()
+/** Dimensions utilisées pour le placement (doivent matcher le CSS). */
+export const LAYOUT = {
+  cardW: 148,
+  cardH: 112,
+  pairGap: 14,
+  unitGap: 52,
+  rowGap: 118,
+  padX: 36,
+  padY: 28,
+} as const
 
+export interface PositionedNode {
+  person: Person
+  /** Centre horizontal de la carte */
+  cx: number
+  /** Haut de la carte */
+  top: number
+  /** Génération d’affichage (0 = aïeux) */
+  gen: number
+}
+
+export interface PositionedFamily {
+  key: string
+  parentIds: string[]
+  childIds: string[]
+}
+
+export interface PositionedLayout {
+  nodes: PositionedNode[]
+  byId: Map<string, PositionedNode>
+  families: PositionedFamily[]
+  width: number
+  height: number
+  generations: number
+}
+
+function bloodGenerationMap(tree: FamilyTree): Map<string, number> {
+  const gen = new Map<string, number>()
   for (const p of tree.people) {
     if (!hasParentsInTree(tree, p)) gen.set(p.id, 0)
   }
 
   let changed = true
   let guard = 0
-  while (changed && guard < tree.people.length + 5) {
+  while (changed && guard < tree.people.length + 8) {
     changed = false
     guard += 1
-
     for (const p of tree.people) {
       let parentMax = -1
       if (p.fatherId && gen.has(p.fatherId)) {
@@ -637,23 +670,6 @@ function computeGenerationMap(tree: FamilyTree): Map<string, number> {
         }
       }
     }
-
-    for (const p of tree.people) {
-      const partner = findPartner(tree, p)
-      if (!partner) continue
-      const ga = gen.get(p.id)
-      const gb = gen.get(partner.id)
-      if (ga === undefined && gb === undefined) continue
-      const m = Math.max(ga ?? 0, gb ?? 0)
-      if (gen.get(p.id) !== m) {
-        gen.set(p.id, m)
-        changed = true
-      }
-      if (gen.get(partner.id) !== m) {
-        gen.set(partner.id, m)
-        changed = true
-      }
-    }
   }
 
   for (const p of tree.people) {
@@ -662,98 +678,9 @@ function computeGenerationMap(tree: FamilyTree): Map<string, number> {
   return gen
 }
 
-function orderPair(a: Person, b: Person): [Person, Person] {
-  if (a.gender === 'male' && b.gender !== 'male') return [a, b]
-  if (b.gender === 'male' && a.gender !== 'male') return [b, a]
-  return displayName(a).localeCompare(displayName(b), 'fr') <= 0 ? [a, b] : [b, a]
-}
-
-function parentSortKey(
-  person: Person,
-  indexOf: Map<string, number>,
-): number {
-  const indexes: number[] = []
-  if (person.fatherId && indexOf.has(person.fatherId)) {
-    indexes.push(indexOf.get(person.fatherId)!)
-  }
-  if (person.motherId && indexOf.has(person.motherId)) {
-    indexes.push(indexOf.get(person.motherId)!)
-  }
-  if (indexes.length === 0) return 9999
-  return indexes.reduce((a, b) => a + b, 0) / indexes.length
-}
-
-/** Rangées ordonnées sous les parents pour limiter les croisements. */
-export function buildGenerationLayout(tree: FamilyTree): GenerationLayout {
-  if (tree.people.length === 0) {
-    return { generations: [], families: [] }
-  }
-
-  const gen = computeGenerationMap(tree)
-  const maxGen = Math.max(0, ...gen.values())
-  const placed = new Set<string>()
-  const generations: GenUnit[][] = []
-  const indexOf = new Map<string, number>()
-  let globalIndex = 0
-
-  for (let g = 0; g <= maxGen; g++) {
-    const rowPeople = tree.people
-      .filter((p) => gen.get(p.id) === g)
-      .sort((a, b) => {
-        const ka = parentSortKey(a, indexOf)
-        const kb = parentSortKey(b, indexOf)
-        if (ka !== kb) return ka - kb
-        const ya = a.birthYear ?? 9999
-        const yb = b.birthYear ?? 9999
-        if (ya !== yb) return ya - yb
-        return displayName(a).localeCompare(displayName(b), 'fr')
-      })
-
-    const units: GenUnit[] = []
-    // Priorité : regrouper d’abord les co-parents qui ont des enfants ensemble
-    const remaining = [...rowPeople]
-    while (remaining.length > 0) {
-      const person = remaining.shift()!
-      if (placed.has(person.id)) continue
-
-      const partner = findPartner(tree, person)
-      const partnerIdx = partner
-        ? remaining.findIndex((p) => p.id === partner.id)
-        : -1
-
-      if (
-        partner &&
-        !placed.has(partner.id) &&
-        gen.get(partner.id) === g &&
-        (partnerIdx >= 0 || rowPeople.some((p) => p.id === partner.id))
-      ) {
-        // Retirer le partenaire de la file s’il y est encore
-        if (partnerIdx >= 0) remaining.splice(partnerIdx, 1)
-        const [left, right] = orderPair(person, partner)
-        units.push({
-          key: `pair-${left.id}-${right.id}`,
-          kind: 'pair',
-          left,
-          right,
-        })
-        placed.add(left.id)
-        placed.add(right.id)
-        indexOf.set(left.id, globalIndex++)
-        indexOf.set(right.id, globalIndex++)
-      } else {
-        units.push({ key: `solo-${person.id}`, kind: 'single', person })
-        placed.add(person.id)
-        indexOf.set(person.id, globalIndex++)
-      }
-    }
-    if (units.length > 0) generations.push(units)
-  }
-
+function collectFamilies(tree: FamilyTree): PositionedFamily[] {
   const ids = new Set(tree.people.map((p) => p.id))
-  const familyMap = new Map<
-    string,
-    { key: string; parentIds: string[]; childIds: string[] }
-  >()
+  const familyMap = new Map<string, PositionedFamily>()
 
   for (const child of tree.people) {
     const parentIds = [child.fatherId, child.motherId].filter(
@@ -784,7 +711,391 @@ export function buildGenerationLayout(tree: FamilyTree): GenerationLayout {
     })
   }
 
-  return { generations, families: Array.from(familyMap.values()) }
+  return Array.from(familyMap.values())
+}
+
+/**
+ * Génération d’affichage :
+ * - base = profondeur de sang
+ * - les co-parents (enfants en commun) sont alignés sur la même rangée
+ * - les enfants restent strictement en dessous
+ * - les conjoints sans parents dans l’arbre rejoignent leur partenaire
+ */
+function displayGenerationMap(tree: FamilyTree): Map<string, number> {
+  const blood = bloodGenerationMap(tree)
+  const display = new Map(blood)
+  const families = collectFamilies(tree)
+
+  let changed = true
+  let guard = 0
+  while (changed && guard < tree.people.length * 4 + 10) {
+    changed = false
+    guard += 1
+
+    // Conjoints entrés dans la famille → rangée du partenaire
+    for (const p of tree.people) {
+      if (hasParentsInTree(tree, p)) continue
+      const partner = findPartner(tree, p)
+      if (!partner) continue
+      const target = display.get(partner.id)
+      if (target === undefined) continue
+      if (display.get(p.id) !== target) {
+        display.set(p.id, target)
+        changed = true
+      }
+    }
+
+    // Co-parents alignés
+    for (const fam of families) {
+      if (fam.parentIds.length < 2) continue
+      const gens = fam.parentIds.map((id) => display.get(id) ?? 0)
+      const m = Math.max(...gens)
+      for (const id of fam.parentIds) {
+        if ((display.get(id) ?? 0) !== m) {
+          display.set(id, m)
+          changed = true
+        }
+      }
+    }
+
+    // Enfants strictement sous le parent le plus bas
+    for (const child of tree.people) {
+      let parentMax = -1
+      if (child.fatherId && display.has(child.fatherId)) {
+        parentMax = Math.max(parentMax, display.get(child.fatherId)!)
+      }
+      if (child.motherId && display.has(child.motherId)) {
+        parentMax = Math.max(parentMax, display.get(child.motherId)!)
+      }
+      if (parentMax < 0) continue
+      const need = parentMax + 1
+      if ((display.get(child.id) ?? 0) < need) {
+        display.set(child.id, need)
+        changed = true
+      }
+    }
+  }
+
+  return display
+}
+
+function orderPair(a: Person, b: Person): [Person, Person] {
+  if (a.gender === 'male' && b.gender !== 'male') return [a, b]
+  if (b.gender === 'male' && a.gender !== 'male') return [b, a]
+  return displayName(a).localeCompare(displayName(b), 'fr') <= 0 ? [a, b] : [b, a]
+}
+
+function unitWidth(unit: GenUnit): number {
+  return unit.kind === 'pair'
+    ? LAYOUT.cardW * 2 + LAYOUT.pairGap
+    : LAYOUT.cardW
+}
+
+function unitPeople(unit: GenUnit): Person[] {
+  return unit.kind === 'pair' ? [unit.left, unit.right] : [unit.person]
+}
+
+function mean(nums: number[]): number {
+  if (nums.length === 0) return 0
+  return nums.reduce((a, b) => a + b, 0) / nums.length
+}
+
+function buildUnitsByGeneration(
+  tree: FamilyTree,
+  gen: Map<string, number>,
+): GenUnit[][] {
+  const maxGen = Math.max(0, ...gen.values())
+  const placed = new Set<string>()
+  const generations: GenUnit[][] = []
+  const indexOf = new Map<string, number>()
+  let globalIndex = 0
+
+  const parentSortKey = (person: Person): number => {
+    const indexes: number[] = []
+    if (person.fatherId && indexOf.has(person.fatherId)) {
+      indexes.push(indexOf.get(person.fatherId)!)
+    }
+    if (person.motherId && indexOf.has(person.motherId)) {
+      indexes.push(indexOf.get(person.motherId)!)
+    }
+    if (indexes.length === 0) return 9999
+    return mean(indexes)
+  }
+
+  for (let g = 0; g <= maxGen; g++) {
+    const rowPeople = tree.people
+      .filter((p) => gen.get(p.id) === g)
+      .sort((a, b) => {
+        const ka = parentSortKey(a)
+        const kb = parentSortKey(b)
+        if (ka !== kb) return ka - kb
+        const ya = a.birthYear ?? 9999
+        const yb = b.birthYear ?? 9999
+        if (ya !== yb) return ya - yb
+        return displayName(a).localeCompare(displayName(b), 'fr')
+      })
+
+    const units: GenUnit[] = []
+    const remaining = [...rowPeople]
+
+    while (remaining.length > 0) {
+      const person = remaining.shift()!
+      if (placed.has(person.id)) continue
+
+      const partner = findPartner(tree, person)
+      const sameGen =
+        partner &&
+        !placed.has(partner.id) &&
+        gen.get(partner.id) === g &&
+        rowPeople.some((p) => p.id === partner.id)
+
+      if (partner && sameGen) {
+        const partnerIdx = remaining.findIndex((p) => p.id === partner.id)
+        if (partnerIdx >= 0) remaining.splice(partnerIdx, 1)
+        const [left, right] = orderPair(person, partner)
+        units.push({
+          key: `pair-${left.id}-${right.id}`,
+          kind: 'pair',
+          left,
+          right,
+        })
+        placed.add(left.id)
+        placed.add(right.id)
+        indexOf.set(left.id, globalIndex++)
+        indexOf.set(right.id, globalIndex++)
+      } else {
+        units.push({ key: `solo-${person.id}`, kind: 'single', person })
+        placed.add(person.id)
+        indexOf.set(person.id, globalIndex++)
+      }
+    }
+
+    if (units.length > 0) generations.push(units)
+  }
+
+  return generations
+}
+
+/** Écarte les unités qui se chevauchent dans une rangée. */
+function resolveOverlaps(
+  lefts: Map<string, number>,
+  units: GenUnit[],
+): void {
+  if (units.length === 0) return
+  const ordered = [...units].sort(
+    (a, b) => (lefts.get(a.key) ?? 0) - (lefts.get(b.key) ?? 0),
+  )
+  let cursor = lefts.get(ordered[0].key) ?? LAYOUT.padX
+  for (const unit of ordered) {
+    const w = unitWidth(unit)
+    const current = lefts.get(unit.key) ?? cursor
+    const next = Math.max(current, cursor)
+    lefts.set(unit.key, next)
+    cursor = next + w + LAYOUT.unitGap
+  }
+}
+
+/**
+ * Place chaque personne en (x, y) : générations en rangées,
+ * enfants recentrés sous leurs parents (méthode barycentre).
+ */
+export function buildPositionedLayout(tree: FamilyTree): PositionedLayout {
+  if (tree.people.length === 0) {
+    return {
+      nodes: [],
+      byId: new Map(),
+      families: [],
+      width: 0,
+      height: 0,
+      generations: 0,
+    }
+  }
+
+  const gen = displayGenerationMap(tree)
+  const generations = buildUnitsByGeneration(tree, gen)
+  const families = collectFamilies(tree)
+  const unitOfPerson = new Map<string, GenUnit>()
+  for (const row of generations) {
+    for (const unit of row) {
+      for (const p of unitPeople(unit)) unitOfPerson.set(p.id, unit)
+    }
+  }
+
+  // Position initiale : rangée 0 à gauche, puis enfants sous les parents
+  const lefts = new Map<string, number>()
+  if (generations[0]) {
+    let x = LAYOUT.padX
+    for (const unit of generations[0]) {
+      lefts.set(unit.key, x)
+      x += unitWidth(unit) + LAYOUT.unitGap
+    }
+  }
+
+  for (let g = 1; g < generations.length; g++) {
+    const row = generations[g]
+    const parentRow = generations[g - 1]
+    const placedKeys = new Set<string>()
+    const slots: { key: string; left: number; width: number }[] = []
+
+    // Familles dont les parents sont au-dessus → centrer les enfants dessous
+    for (const fam of families) {
+      const parentUnits = [
+        ...new Set(
+          fam.parentIds
+            .map((id) => unitOfPerson.get(id))
+            .filter((u): u is GenUnit => Boolean(u && parentRow.includes(u))),
+        ),
+      ]
+      const childUnits = [
+        ...new Set(
+          fam.childIds
+            .map((id) => unitOfPerson.get(id))
+            .filter((u): u is GenUnit => Boolean(u && row.includes(u))),
+        ),
+      ].filter((u) => !placedKeys.has(u.key))
+
+      if (parentUnits.length === 0 || childUnits.length === 0) continue
+
+      const parentMid = mean(
+        parentUnits.map((u) => (lefts.get(u.key) ?? 0) + unitWidth(u) / 2),
+      )
+      const blockW =
+        childUnits.reduce((sum, u) => sum + unitWidth(u), 0) +
+        LAYOUT.unitGap * Math.max(0, childUnits.length - 1)
+      let cursor = parentMid - blockW / 2
+      for (const u of childUnits) {
+        const w = unitWidth(u)
+        slots.push({ key: u.key, left: cursor, width: w })
+        placedKeys.add(u.key)
+        cursor += w + LAYOUT.unitGap
+      }
+    }
+
+    // Unités sans parents placés au-dessus
+    for (const unit of row) {
+      if (placedKeys.has(unit.key)) continue
+      slots.push({
+        key: unit.key,
+        left: LAYOUT.padX + slots.length * 20,
+        width: unitWidth(unit),
+      })
+      placedKeys.add(unit.key)
+    }
+
+    slots.sort((a, b) => a.left - b.left)
+    let cursor = LAYOUT.padX
+    for (const slot of slots) {
+      const left = Math.max(slot.left, cursor)
+      lefts.set(slot.key, left)
+      cursor = left + slot.width + LAYOUT.unitGap
+    }
+  }
+
+  // Recentralisation parents ↔ enfants
+  for (let pass = 0; pass < 32; pass++) {
+    for (const fam of families) {
+      const parentUnits = [
+        ...new Set(
+          fam.parentIds
+            .map((id) => unitOfPerson.get(id))
+            .filter((u): u is GenUnit => Boolean(u)),
+        ),
+      ]
+      const childUnits = [
+        ...new Set(
+          fam.childIds
+            .map((id) => unitOfPerson.get(id))
+            .filter((u): u is GenUnit => Boolean(u)),
+        ),
+      ]
+      if (parentUnits.length === 0 || childUnits.length === 0) continue
+
+      const parentCenters = parentUnits.map((u) => {
+        const left = lefts.get(u.key) ?? 0
+        return left + unitWidth(u) / 2
+      })
+      const childCenters = childUnits.map((u) => {
+        const left = lefts.get(u.key) ?? 0
+        return left + unitWidth(u) / 2
+      })
+      const delta = mean(parentCenters) - mean(childCenters)
+      if (Math.abs(delta) < 0.5) continue
+
+      // Favorise le déplacement des enfants sous les parents
+      if (pass % 3 === 2) {
+        for (const u of parentUnits) {
+          lefts.set(u.key, (lefts.get(u.key) ?? 0) - delta * 0.35)
+        }
+      } else {
+        for (const u of childUnits) {
+          lefts.set(u.key, (lefts.get(u.key) ?? 0) + delta * 0.65)
+        }
+      }
+    }
+
+    for (const row of generations) resolveOverlaps(lefts, row)
+  }
+
+  // Normalise : tout décale pour minX = padX
+  let minLeft = Infinity
+  for (const row of generations) {
+    for (const unit of row) {
+      minLeft = Math.min(minLeft, lefts.get(unit.key) ?? 0)
+    }
+  }
+  const shift = LAYOUT.padX - minLeft
+  if (Math.abs(shift) > 0.01) {
+    for (const [key, value] of lefts) lefts.set(key, value + shift)
+  }
+
+  const nodes: PositionedNode[] = []
+  let maxRight = 0
+  const rowCount = generations.length
+
+  generations.forEach((row, rowIndex) => {
+    const top = LAYOUT.padY + rowIndex * (LAYOUT.cardH + LAYOUT.rowGap)
+    for (const unit of row) {
+      const left = lefts.get(unit.key) ?? LAYOUT.padX
+      const people = unitPeople(unit)
+      people.forEach((person, i) => {
+        const cx = left + LAYOUT.cardW / 2 + i * (LAYOUT.cardW + LAYOUT.pairGap)
+        nodes.push({
+          person,
+          cx,
+          top,
+          gen: rowIndex,
+        })
+        maxRight = Math.max(maxRight, cx + LAYOUT.cardW / 2)
+      })
+    }
+  })
+
+  const byId = new Map(nodes.map((n) => [n.person.id, n]))
+  const height =
+    rowCount === 0
+      ? 0
+      : LAYOUT.padY * 2 +
+        rowCount * LAYOUT.cardH +
+        Math.max(0, rowCount - 1) * LAYOUT.rowGap
+
+  return {
+    nodes,
+    byId,
+    families,
+    width: maxRight + LAYOUT.padX,
+    height,
+    generations: rowCount,
+  }
+}
+
+/** @deprecated Conservé pour compat — préfère buildPositionedLayout */
+export function buildGenerationLayout(tree: FamilyTree): GenerationLayout {
+  const positioned = buildPositionedLayout(tree)
+  const gen = displayGenerationMap(tree)
+  return {
+    generations: buildUnitsByGeneration(tree, gen),
+    families: positioned.families,
+  }
 }
 
 export function parentLabelFor(person: Person): string {
