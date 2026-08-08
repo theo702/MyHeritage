@@ -269,6 +269,9 @@ button {
   padding: 1.5rem;
   overflow: auto;
   min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
 }
 
 .tree-canvas {
@@ -990,8 +993,42 @@ button {
 }
 
 @media (max-width: 900px) {
+  html,
+  body,
+  #root {
+    height: auto;
+    min-height: 100%;
+    overflow-x: auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .app {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
+  }
+
   .main {
     grid-template-columns: 1fr;
+    overflow: visible;
+    min-height: 0;
+  }
+
+  .tree-pane {
+    overflow: visible;
+    padding-bottom: 2.5rem;
+    touch-action: manipulation;
+  }
+
+  /* Laisse de la place quand la fiche est ouverte en bas */
+  .main:not(.solo) .tree-pane {
+    padding-bottom: calc(55vh + 1.5rem);
+  }
+
+  .tree-canvas,
+  .gen-tree {
+    touch-action: pan-x pan-y;
   }
 
   .side-panel {
@@ -1005,11 +1042,16 @@ button {
     z-index: 30;
     border-radius: 18px 18px 0 0;
     box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.4);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   .topbar {
     padding: 1rem;
     flex-wrap: wrap;
+    position: sticky;
+    top: 0;
   }
 
   .brand-name {
@@ -1024,6 +1066,10 @@ button {
     width: 148px;
   }
 
+  .pedigree .person-card-wrap {
+    width: 138px;
+  }
+
   .couple {
     flex-wrap: wrap;
     justify-content: center;
@@ -1031,6 +1077,10 @@ button {
 
   .kids-row {
     gap: 1rem;
+  }
+
+  .gen-row {
+    gap: 1.5rem;
   }
 }
 
