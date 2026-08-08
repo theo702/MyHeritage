@@ -21,6 +21,8 @@ export interface Person {
   deathYear?: number
   gender: Gender
   notes?: string
+  /** Photo d’identité (data URL JPEG compressée) */
+  photo?: string
   fatherId?: string | null
   motherId?: string | null
   spouseIds: string[]

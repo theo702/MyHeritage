@@ -525,6 +525,7 @@ export default function App() {
             deathYear: modalPerson.deathYear,
             gender: modalPerson.gender,
             notes: modalPerson.notes,
+            photo: modalPerson.photo,
           }}
           onClose={() => setModal({ type: 'none' })}
           onSubmit={handleEdit}

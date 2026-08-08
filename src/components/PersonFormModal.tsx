@@ -1,7 +1,8 @@
 import type { Gender, Person, RelationType } from '../types'
 import { GENDER_LABELS, ADDABLE_RELATIONS, RELATION_LABELS } from '../types'
 import { defaultGenderForRelation, displayName } from '../family'
-import { useEffect, useId, useState } from 'react'
+import { compressIdentityPhoto } from '../photo'
+import { useEffect, useId, useRef, useState } from 'react'
 
 export interface PersonFormData {
   firstName: string
@@ -12,6 +13,7 @@ export interface PersonFormData {
   deathYear?: number
   gender: Gender
   notes?: string
+  photo?: string
 }
 
 interface PersonFormModalProps {
@@ -36,6 +38,7 @@ export function PersonFormModal({
   onClose,
 }: PersonFormModalProps) {
   const formId = useId()
+  const fileRef = useRef<HTMLInputElement>(null)
   const [firstName, setFirstName] = useState(initial?.firstName ?? '')
   const [secondName, setSecondName] = useState(initial?.secondName ?? '')
   const [thirdName, setThirdName] = useState(initial?.thirdName ?? '')
@@ -53,6 +56,9 @@ export function PersonFormModal({
       (relation ? defaultGenderForRelation(relation) : 'unknown'),
   )
   const [notes, setNotes] = useState(initial?.notes ?? '')
+  const [photo, setPhoto] = useState<string | undefined>(initial?.photo)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -61,6 +67,21 @@ export function PersonFormModal({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
+
+  async function handlePhotoFile(file: File | undefined) {
+    if (!file) return
+    setPhotoError(null)
+    setPhotoBusy(true)
+    try {
+      const dataUrl = await compressIdentityPhoto(file)
+      setPhoto(dataUrl)
+    } catch (err) {
+      setPhotoError(err instanceof Error ? err.message : 'Erreur photo')
+    } finally {
+      setPhotoBusy(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -75,8 +96,13 @@ export function PersonFormModal({
       deathYear: deathYear ? Number(deathYear) : undefined,
       gender,
       notes: notes.trim() || undefined,
+      photo,
     })
   }
+
+  const initials =
+    `${firstName.trim()[0] ?? ''}${lastName.trim()[0] ?? ''}`.toUpperCase() ||
+    '?'
 
   return (
     <div
@@ -97,6 +123,52 @@ export function PersonFormModal({
         {subtitle && <p className="sub">{subtitle}</p>}
         <form onSubmit={handleSubmit}>
           <div className="form-grid">
+            <div className="photo-field">
+              <div
+                className={`photo-preview ${gender}${photo ? ' has-photo' : ''}`}
+                aria-hidden
+              >
+                {photo ? <img src={photo} alt="" /> : <span>{initials}</span>}
+              </div>
+              <div className="photo-actions">
+                <label
+                  className="btn btn-ghost photo-upload-btn"
+                  htmlFor={`${formId}-photo`}
+                >
+                  {photoBusy
+                    ? 'Compression…'
+                    : photo
+                      ? 'Changer la photo'
+                      : 'Ajouter une photo'}
+                </label>
+                <input
+                  ref={fileRef}
+                  id={`${formId}-photo`}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  hidden
+                  disabled={photoBusy}
+                  onChange={(e) => void handlePhotoFile(e.target.files?.[0])}
+                />
+                {photo && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    onClick={() => {
+                      setPhoto(undefined)
+                      setPhotoError(null)
+                    }}
+                  >
+                    Retirer
+                  </button>
+                )}
+                <p className="photo-hint">
+                  Photo d’identité (recadrée en carré, compressée).
+                </p>
+                {photoError && <p className="photo-error">{photoError}</p>}
+              </div>
+            </div>
             <div className="field">
               <label htmlFor={`${formId}-fn`}>1er prénom</label>
               <input
@@ -204,7 +276,7 @@ export function PersonFormModal({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={!firstName.trim() || !lastName.trim()}
+              disabled={!firstName.trim() || !lastName.trim() || photoBusy}
             >
               {submitLabel}
             </button>

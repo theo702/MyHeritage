@@ -44,6 +44,10 @@ function normalizePerson(person: Person): Person {
     ...person,
     secondName: cleanOptionalName(person.secondName),
     thirdName: cleanOptionalName(person.thirdName),
+    photo:
+      typeof person.photo === 'string' && person.photo.startsWith('data:image/')
+        ? person.photo
+        : undefined,
     spouseIds: person.spouseIds ?? [],
     fatherId: person.fatherId ?? null,
     motherId: person.motherId ?? null,
@@ -63,6 +67,7 @@ export function createPerson(
     deathYear: data.deathYear,
     gender: data.gender,
     notes: data.notes?.trim() || undefined,
+    photo: data.photo || undefined,
     fatherId: data.fatherId ?? null,
     motherId: data.motherId ?? null,
     spouseIds: data.spouseIds ?? [],
@@ -178,6 +183,7 @@ export function addRelative(
     deathYear?: number
     gender: Gender
     notes?: string
+    photo?: string
   },
 ): FamilyTree {
   const people = tree.people.map((p) => ({
@@ -295,11 +301,14 @@ export function addRelative(
 
 export function addFirstPerson(data: {
   firstName: string
+  secondName?: string
+  thirdName?: string
   lastName: string
   birthYear?: number
   deathYear?: number
   gender: Gender
   notes?: string
+  photo?: string
 }): FamilyTree {
   const person = createPerson({
     ...data,
@@ -331,7 +340,13 @@ export function updatePerson(
                 ? cleanOptionalName(patch.thirdName)
                 : p.thirdName,
             lastName: patch.lastName?.trim() ?? p.lastName,
-            notes: patch.notes?.trim() || undefined,
+            notes:
+              patch.notes !== undefined
+                ? patch.notes.trim() || undefined
+                : p.notes,
+            photo: Object.hasOwn(patch, 'photo')
+              ? patch.photo || undefined
+              : p.photo,
           }
         : p,
     ),

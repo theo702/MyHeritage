@@ -55,7 +55,13 @@ function PersonCard({
         data-person-id={person.id}
         title={person.notes || displayName(person)}
       >
-        <div className={`person-avatar ${person.gender}`}>{initials(person)}</div>
+        <div className={`person-avatar ${person.gender}${person.photo ? ' has-photo' : ''}`}>
+          {person.photo ? (
+            <img src={person.photo} alt="" />
+          ) : (
+            initials(person)
+          )}
+        </div>
         <p className="person-name">{shortDisplayName(person)}</p>
         {years ? (
           <p className="person-meta">{years}</p>

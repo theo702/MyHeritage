@@ -37,9 +37,24 @@ export function SidePanel({
   return (
     <aside className="side-panel">
       <div className="panel-header">
-        <div>
-          <h2>{displayName(person)}</h2>
-          <p className="sub">{years || 'Dates non renseignées'}</p>
+        <div className="panel-identity">
+          <div
+            className={`panel-photo ${person.gender}${person.photo ? ' has-photo' : ''}`}
+            aria-hidden
+          >
+            {person.photo ? (
+              <img src={person.photo} alt="" />
+            ) : (
+              <span>
+                {(person.firstName?.[0] ?? '') + (person.lastName?.[0] ?? '') ||
+                  '?'}
+              </span>
+            )}
+          </div>
+          <div>
+            <h2>{displayName(person)}</h2>
+            <p className="sub">{years || 'Dates non renseignées'}</p>
+          </div>
         </div>
         <button
           type="button"
