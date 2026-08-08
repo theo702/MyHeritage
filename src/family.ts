@@ -120,9 +120,11 @@ export function shortDisplayName(person: Person): string {
 
 export function lifespan(person: Person): string {
   if (!person.birthYear && !person.deathYear) return ''
-  const birth = person.birthYear ?? '?'
-  const death = person.deathYear ?? ''
-  return death ? `${birth} – ${death}` : `né(e) ${birth}`
+  if (person.birthYear && person.deathYear) {
+    return `${person.birthYear}–${person.deathYear}`
+  }
+  if (person.birthYear) return `${person.birthYear}`
+  return `†${person.deathYear}`
 }
 
 export function defaultGenderForRelation(relation: RelationType): Gender {
@@ -609,13 +611,15 @@ export interface GenerationLayout {
 
 /** Dimensions utilisées pour le placement (doivent matcher le CSS). */
 export const LAYOUT = {
-  cardW: 148,
-  cardH: 112,
-  pairGap: 14,
-  unitGap: 52,
-  rowGap: 118,
-  padX: 36,
-  padY: 28,
+  cardW: 108,
+  cardH: 98,
+  pairGap: 36,
+  unitGap: 44,
+  rowGap: 78,
+  padX: 28,
+  padY: 24,
+  /** Hauteur relative où passe le trait de couple (0–1) */
+  coupleLineAt: 0.38,
 } as const
 
 export interface PositionedNode {
@@ -634,10 +638,17 @@ export interface PositionedFamily {
   childIds: string[]
 }
 
+export interface PositionedCouple {
+  key: string
+  leftId: string
+  rightId: string
+}
+
 export interface PositionedLayout {
   nodes: PositionedNode[]
   byId: Map<string, PositionedNode>
   families: PositionedFamily[]
+  couples: PositionedCouple[]
   width: number
   height: number
   generations: number
@@ -905,6 +916,7 @@ export function buildPositionedLayout(tree: FamilyTree): PositionedLayout {
       nodes: [],
       byId: new Map(),
       families: [],
+      couples: [],
       width: 0,
       height: 0,
       generations: 0,
@@ -1049,6 +1061,7 @@ export function buildPositionedLayout(tree: FamilyTree): PositionedLayout {
   }
 
   const nodes: PositionedNode[] = []
+  const couples: PositionedCouple[] = []
   let maxRight = 0
   const rowCount = generations.length
 
@@ -1067,6 +1080,13 @@ export function buildPositionedLayout(tree: FamilyTree): PositionedLayout {
         })
         maxRight = Math.max(maxRight, cx + LAYOUT.cardW / 2)
       })
+      if (unit.kind === 'pair') {
+        couples.push({
+          key: unit.key,
+          leftId: unit.left.id,
+          rightId: unit.right.id,
+        })
+      }
     }
   })
 
@@ -1082,6 +1102,7 @@ export function buildPositionedLayout(tree: FamilyTree): PositionedLayout {
     nodes,
     byId,
     families,
+    couples,
     width: maxRight + LAYOUT.padX,
     height,
     generations: rowCount,

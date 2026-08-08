@@ -976,15 +976,19 @@ button {
 }
 
 .pedigree-path {
-  stroke: rgba(212, 181, 110, 0.85);
-  stroke-width: 2.25;
+  stroke: rgba(232, 220, 180, 0.88);
+  stroke-width: 1.75;
   stroke-linecap: square;
   fill: none;
 }
 
+.pedigree-couple {
+  stroke-width: 2;
+}
+
 .pedigree .person-card-wrap {
   z-index: 1;
-  width: 148px;
+  width: 108px;
 }
 
 .pedigree .person-card-wrap.is-selected {
@@ -993,43 +997,59 @@ button {
 
 .pedigree .person-card {
   width: 100%;
-  min-height: 112px;
-  padding: 0.75rem 0.65rem 0.65rem;
+  height: 98px;
+  min-height: 98px;
+  padding: 0.35rem 0.3rem 0.4rem;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: flex-start;
   box-sizing: border-box;
+  background: rgba(18, 32, 24, 0.92);
+  border: 1px solid rgba(196, 163, 90, 0.35);
+  border-radius: 10px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28);
 }
 
 .pedigree .person-avatar {
-  margin-bottom: 0.4rem;
-  width: 2.3rem;
-  height: 2.3rem;
-  font-size: 0.85rem;
+  margin-bottom: 0.28rem;
+  width: 2.55rem;
+  height: 2.55rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  flex-shrink: 0;
 }
 
 .pedigree .person-name {
-  font-size: 0.88rem;
+  font-size: 0.72rem;
   text-align: center;
-  line-height: 1.2;
-}
-
-.pedigree .person-given,
-.pedigree .person-meta {
-  text-align: center;
-}
-
-.person-note {
-  margin: 0.35rem 0 0;
-  font-size: 0.68rem;
-  line-height: 1.25;
-  color: var(--accent-strong);
+  line-height: 1.15;
+  font-weight: 500;
+  max-width: 100%;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  max-width: 100%;
+  margin: 0;
+}
+
+.pedigree .person-meta {
+  text-align: center;
+  font-size: 0.62rem;
+  margin: 0.15rem 0 0;
+  color: var(--ink-muted);
+  line-height: 1.1;
+}
+
+.pedigree .person-meta-empty {
+  min-height: 0.7rem;
+}
+
+.pedigree .card-add-btn {
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.35rem;
+  font-size: 0.7rem;
 }
 
 .couple {
@@ -1225,15 +1245,15 @@ button {
   }
 
   .person-card {
-    width: 148px;
+    width: 108px;
   }
 
   .person-card-wrap {
-    width: 148px;
+    width: 108px;
   }
 
   .pedigree .person-card-wrap {
-    width: 148px;
+    width: 108px;
   }
 
   .couple {

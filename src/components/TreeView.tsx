@@ -3,7 +3,6 @@ import {
   LAYOUT,
   buildPositionedLayout,
   displayName,
-  givenNames,
   lifespan,
   shortDisplayName,
 } from '../family'
@@ -35,7 +34,6 @@ function PersonCard({
   onAddRelative,
 }: PersonCardProps) {
   const years = lifespan(person)
-  const hasExtraNames = Boolean(person.secondName || person.thirdName)
   const left = cx - LAYOUT.cardW / 2
 
   return (
@@ -55,17 +53,14 @@ function PersonCard({
         aria-pressed={selected}
         aria-label={displayName(person)}
         data-person-id={person.id}
+        title={person.notes || displayName(person)}
       >
         <div className={`person-avatar ${person.gender}`}>{initials(person)}</div>
         <p className="person-name">{shortDisplayName(person)}</p>
-        {hasExtraNames && (
-          <p className="person-given">{givenNames(person)}</p>
-        )}
-        {years && <p className="person-meta">{years}</p>}
-        {person.notes && (
-          <p className="person-note" title={person.notes}>
-            {person.notes}
-          </p>
+        {years ? (
+          <p className="person-meta">{years}</p>
+        ) : (
+          <p className="person-meta person-meta-empty"> </p>
         )}
       </button>
       {selected && onAddRelative && (
@@ -77,7 +72,7 @@ function PersonCard({
             onAddRelative(person.id)
           }}
         >
-          + Ajouter un membre
+          + Ajouter
         </button>
       )}
     </div>
@@ -103,6 +98,15 @@ export function FamilyTreeView({
 
   const isDimmed = (id: string) => matchIds !== null && !matchIds.has(id)
 
+  const coupledInFamily = useMemo(() => {
+    const keys = new Set<string>()
+    for (const fam of layout.families) {
+      if (fam.parentIds.length < 2) continue
+      keys.add([...fam.parentIds].sort().join('+'))
+    }
+    return keys
+  }, [layout.families])
+
   return (
     <div
       className="gen-tree pedigree"
@@ -118,36 +122,81 @@ export function FamilyTreeView({
           const parents = fam.parentIds
             .map((id) => layout.byId.get(id))
             .filter((n): n is NonNullable<typeof n> => Boolean(n))
+            .sort((a, b) => a.cx - b.cx)
           const children = fam.childIds
             .map((id) => layout.byId.get(id))
             .filter((n): n is NonNullable<typeof n> => Boolean(n))
+            .sort((a, b) => a.cx - b.cx)
 
           if (parents.length === 0 || children.length === 0) return null
 
-          const parentBottom = Math.max(
-            ...parents.map((p) => p.top + LAYOUT.cardH),
-          )
           const childTop = Math.min(...children.map((c) => c.top))
-          const barY = parentBottom + (childTop - parentBottom) * 0.45
-          const xs = [
-            ...parents.map((p) => p.cx),
-            ...children.map((c) => c.cx),
-          ]
-          const barLeft = Math.min(...xs)
-          const barRight = Math.max(...xs)
+          const childXs = children.map((c) => c.cx)
 
-          return (
-            <g key={fam.key} className="pedigree-links">
-              {parents.map((p) => (
+          // Style classique : trait de couple → descente au centre → barre frères/sœurs
+          if (parents.length >= 2) {
+            const left = parents[0]
+            const right = parents[parents.length - 1]
+            const coupleY = left.top + LAYOUT.cardH * LAYOUT.coupleLineAt
+            const dropX = (left.cx + right.cx) / 2
+            const barY = coupleY + (childTop - coupleY) * 0.58
+            const barLeft = Math.min(dropX, ...childXs)
+            const barRight = Math.max(dropX, ...childXs)
+
+            return (
+              <g key={fam.key} className="pedigree-links">
                 <line
-                  key={`p-${fam.key}-${p.person.id}`}
-                  x1={p.cx}
-                  y1={p.top + LAYOUT.cardH}
-                  x2={p.cx}
+                  x1={left.cx}
+                  y1={coupleY}
+                  x2={right.cx}
+                  y2={coupleY}
+                  className="pedigree-path pedigree-couple"
+                />
+                <line
+                  x1={dropX}
+                  y1={coupleY}
+                  x2={dropX}
                   y2={barY}
                   className="pedigree-path"
                 />
-              ))}
+                <line
+                  x1={barLeft}
+                  y1={barY}
+                  x2={barRight}
+                  y2={barY}
+                  className="pedigree-path"
+                />
+                {children.map((child) => (
+                  <line
+                    key={`c-${fam.key}-${child.person.id}`}
+                    x1={child.cx}
+                    y1={barY}
+                    x2={child.cx}
+                    y2={child.top}
+                    className="pedigree-path"
+                  />
+                ))}
+              </g>
+            )
+          }
+
+          // Parent seul
+          const parent = parents[0]
+          const dropX = parent.cx
+          const fromY = parent.top + LAYOUT.cardH
+          const barY = fromY + (childTop - fromY) * 0.45
+          const barLeft = Math.min(dropX, ...childXs)
+          const barRight = Math.max(dropX, ...childXs)
+
+          return (
+            <g key={fam.key} className="pedigree-links">
+              <line
+                x1={dropX}
+                y1={fromY}
+                x2={dropX}
+                y2={barY}
+                className="pedigree-path"
+              />
               <line
                 x1={barLeft}
                 y1={barY}
@@ -166,6 +215,28 @@ export function FamilyTreeView({
                 />
               ))}
             </g>
+          )
+        })}
+
+        {/* Traits de couple sans enfants (ou non couverts ci-dessus) */}
+        {layout.couples.map((couple) => {
+          const key = [couple.leftId, couple.rightId].sort().join('+')
+          if (coupledInFamily.has(key)) return null
+          const a = layout.byId.get(couple.leftId)
+          const b = layout.byId.get(couple.rightId)
+          if (!a || !b) return null
+          const left = a.cx <= b.cx ? a : b
+          const right = a.cx <= b.cx ? b : a
+          const coupleY = left.top + LAYOUT.cardH * LAYOUT.coupleLineAt
+          return (
+            <line
+              key={`couple-${couple.key}`}
+              x1={left.cx}
+              y1={coupleY}
+              x2={right.cx}
+              y2={coupleY}
+              className="pedigree-path pedigree-couple"
+            />
           )
         })}
       </svg>
