@@ -231,6 +231,12 @@ button {
   filter: brightness(1.06);
 }
 
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
+
 .btn-ghost {
   background: transparent;
   border-color: var(--line);
