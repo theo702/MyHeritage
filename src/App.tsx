@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   AddRelativeChooser,
   PersonFormModal,
@@ -20,6 +20,16 @@ import {
 import { fetchSharedTree, pushSharedTree, type SyncStatus } from './sync'
 import type { FamilyTree, RelationType } from './types'
 import { RELATION_LABELS } from './types'
+import {
+  ZOOM_DEFAULT,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ZOOM_STEP,
+  clampZoom,
+  formatZoom,
+  loadZoom,
+  saveZoom,
+} from './zoom'
 
 type ModalState =
   | { type: 'none' }
@@ -59,8 +69,18 @@ export default function App() {
   const [filter, setFilter] = useState('')
   const [viewRootId, setViewRootId] = useState<string | null>(null)
   const [modal, setModal] = useState<ModalState>({ type: 'none' })
+  const [zoom, setZoom] = useState(() => loadZoom())
   const skipNextSave = useRef(true)
   const saveTimer = useRef<number | null>(null)
+  const treePaneRef = useRef<HTMLElement | null>(null)
+  const zoomRef = useRef(zoom)
+  zoomRef.current = zoom
+
+  function changeZoom(next: number) {
+    const value = clampZoom(next)
+    setZoom(value)
+    saveZoom(value)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -105,6 +125,59 @@ export default function App() {
       inline: 'nearest',
     })
   }, [selectedId])
+
+  /* Ctrl/⌘ + molette et pincement pour zoomer l’arbre */
+  useEffect(() => {
+    const pane = treePaneRef.current
+    if (!pane) return
+
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return
+      e.preventDefault()
+      const delta = e.deltaY > 0 ? -ZOOM_STEP / 2 : ZOOM_STEP / 2
+      changeZoom(zoomRef.current + delta)
+    }
+
+    let startDist = 0
+    let startZoom = ZOOM_DEFAULT
+
+    const touchDist = (touches: TouchList) =>
+      Math.hypot(
+        touches[0].clientX - touches[1].clientX,
+        touches[0].clientY - touches[1].clientY,
+      )
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        startDist = touchDist(e.touches)
+        startZoom = zoomRef.current
+      }
+    }
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length !== 2 || startDist <= 0) return
+      e.preventDefault()
+      changeZoom(startZoom * (touchDist(e.touches) / startDist))
+    }
+
+    const onTouchEnd = () => {
+      startDist = 0
+    }
+
+    pane.addEventListener('wheel', onWheel, { passive: false })
+    pane.addEventListener('touchstart', onTouchStart, { passive: true })
+    pane.addEventListener('touchmove', onTouchMove, { passive: false })
+    pane.addEventListener('touchend', onTouchEnd)
+    pane.addEventListener('touchcancel', onTouchEnd)
+
+    return () => {
+      pane.removeEventListener('wheel', onWheel)
+      pane.removeEventListener('touchstart', onTouchStart)
+      pane.removeEventListener('touchmove', onTouchMove)
+      pane.removeEventListener('touchend', onTouchEnd)
+      pane.removeEventListener('touchcancel', onTouchEnd)
+    }
+  }, [ready, tree.people.length])
 
   const lastNames = useMemo(() => getUniqueLastNames(tree), [tree])
   const matched = useMemo(
@@ -263,7 +336,7 @@ export default function App() {
       </header>
 
       <div className={`main${selected ? '' : ' solo'}`}>
-        <section className="tree-pane">
+        <section className="tree-pane" ref={treePaneRef}>
           {!ready ? (
             <div className="empty-state">
               <BrandMark />
@@ -292,17 +365,52 @@ export default function App() {
               <div className="hint-bar">
                 <p>
                   Clique sur une personne pour voir sa fiche et ajouter père,
-                  mère, frère, sœur, fils ou fille.
+                  mère, frère, sœur, fils ou fille. Pince ou utilise − / + pour
+                  dézoomer.
                 </p>
-                <span className="stats">
-                  {tree.people.length} personne
-                  {tree.people.length > 1 ? 's' : ''}
-                  {filter.trim()
-                    ? ` · ${matched.length} pour « ${filter.trim()} »`
-                    : ''}
-                </span>
+                <div className="hint-bar-end">
+                  <span className="stats">
+                    {tree.people.length} personne
+                    {tree.people.length > 1 ? 's' : ''}
+                    {filter.trim()
+                      ? ` · ${matched.length} pour « ${filter.trim()} »`
+                      : ''}
+                  </span>
+                  <div className="zoom-controls desktop-only" role="group" aria-label="Zoom">
+                    <button
+                      type="button"
+                      className="zoom-btn"
+                      aria-label="Dézoomer"
+                      disabled={zoom <= ZOOM_MIN}
+                      onClick={() => changeZoom(zoom - ZOOM_STEP)}
+                    >
+                      −
+                    </button>
+                    <button
+                      type="button"
+                      className="zoom-value"
+                      aria-label="Réinitialiser le zoom"
+                      title="Réinitialiser"
+                      onClick={() => changeZoom(ZOOM_DEFAULT)}
+                    >
+                      {formatZoom(zoom)}
+                    </button>
+                    <button
+                      type="button"
+                      className="zoom-btn"
+                      aria-label="Zoomer"
+                      disabled={zoom >= ZOOM_MAX}
+                      onClick={() => changeZoom(zoom + ZOOM_STEP)}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="tree-canvas">
+              <div
+                className="tree-canvas"
+                style={{ zoom } as CSSProperties}
+              >
                 <FamilyTreeView
                   tree={visibleTree}
                   selectedId={selectedId}
@@ -312,6 +420,39 @@ export default function App() {
                     setModal({ type: 'choose-relation', personId: id })
                   }
                 />
+              </div>
+              <div
+                className={`zoom-dock${selected ? ' with-sheet' : ''}`}
+                role="group"
+                aria-label="Zoom de l’arbre"
+              >
+                <button
+                  type="button"
+                  className="zoom-btn"
+                  aria-label="Dézoomer"
+                  disabled={zoom <= ZOOM_MIN}
+                  onClick={() => changeZoom(zoom - ZOOM_STEP)}
+                >
+                  −
+                </button>
+                <button
+                  type="button"
+                  className="zoom-value"
+                  aria-label="Réinitialiser le zoom"
+                  title="Réinitialiser"
+                  onClick={() => changeZoom(ZOOM_DEFAULT)}
+                >
+                  {formatZoom(zoom)}
+                </button>
+                <button
+                  type="button"
+                  className="zoom-btn"
+                  aria-label="Zoomer"
+                  disabled={zoom >= ZOOM_MAX}
+                  onClick={() => changeZoom(zoom + ZOOM_STEP)}
+                >
+                  +
+                </button>
               </div>
             </>
           )}
